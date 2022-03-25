@@ -76,6 +76,15 @@
 (with-form [foo (str ?first-name " " ?last-name)]
   @foo)
 
+;; a field can be used more than once in a form:
+
+(with-form [!form [[:db/add 1 :person/pet ?pet-id]
+                   [:db/add ?pet-id :pet/name ?pet-name]]]
+  (reset! ?pet-id 2)
+  (reset! ?pet-name "Fido")
+  @!form)
+
+
 ;; Initial values for fields can be provided via an `:init` map, which should map
 ;; fields to values.
 
@@ -110,18 +119,6 @@
                            (reset! ?number
                                    (js/parseInt (.. e -target -value))))}]
      [:div (str/join @cars)]]))
-
-
-;; Fields can be used in expressions more than once:
-
-(with-form [!form [?name
-                   {:name ?name}
-                   (->> (repeat ?name)
-                        (take ?number)
-                        (map str/upper-case))]]
-  (reset! ?name "Blythe")
-  (reset! ?number 3)
-  @!form)
 
 ;; ## Metadata
 
@@ -282,13 +279,30 @@
             :meta {?email {:required? true}}]
   (forms/messages !form :deep true))
 
-;; fields can be used more than once in a form:
+;; ### Validator functions
 
-(with-form [!form [[:db/add 1 :person/pet ?pet-id]
-                   [:db/add ?pet-id :pet/name ?pet-name]]]
-  (reset! ?pet-id 2)
-  (reset! ?pet-name "Fido")
-  @!form)
+;; Validators are functions that returns messages. Fields and forms can both have `:validators`.
+;;
+;; `(value, context) => [...message]`
+;;
+
+;; Each message is a map containing:
+;; - `:type`
+;;   - `:invalid` implies an invalid value which cannot be persisted.
+;;   - `:info` has no effect other than showing content to the user.
+;;   - `:in-progress` shows a loading animation.
+;; - `:content` (a string, or hiccup)
+;; - `:visibility` (`#{:touched :focused :always}`)
+;;
+;; Examples:
+
+[{:type :info
+  :content "Instructions/hints for the user"
+  :when #{:always :focused :touched}} ;; default is :touched
+ {:type :invalid
+  :content "A value that should be rejected"}
+ {:type :in-progress
+  :content "(optional) - a loading indicator should be displayed while this message is present"}]
 
 ;; ## Plural fields
 
@@ -369,31 +383,6 @@
                    '{?name "Frog"})
   (->> (forms/messages ?names :deep true)
        (map :content)))
-
-;; ## Validators
-
-;; A validator is a function that returns messages. Fields and forms can both have `:validators`.
-;;
-;; `(value, context) => [...message]`
-;;
-
-;; Each message is a map containing:
-;; - `:type`
-;;   - `:invalid` implies an invalid value which cannot be persisted.
-;;   - `:info` has no effect other than showing content to the user.
-;;   - `:in-progress` shows a loading animation.
-;; - `:content` (a string, or hiccup)
-;; - `:visibility` (`#{:touched :focused :always}`)
-;;
-;; Examples:
-
-[{:type :info
-  :content "Instructions/hints for the user"
-  :when #{:always :focused :touched}} ;; default is :touched
- {:type :invalid
-  :content "A value that should be rejected"}
- {:type :in-progress
-  :content "(optional) - a loading indicator should be displayed while this message is present"}]
 
 ;; ## Server submission
 
