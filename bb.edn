@@ -1,0 +1,8 @@
+{:tasks {dev (shell "shadow-cljs -A:dev:clerk watch clerk")
+         publish (do (shell "yarn")
+                     (shell "yarn shadow-cljs -A:dev:clerk release clerk")
+                     (shell "clojure -X:dev:clerk user/publish!")
+                     (shell "rm public/index.html")
+                     (shell "mv public/dev/inside_out/notebook.htmlc" "public/index.html")
+                     (shell "touch public/CNAME")
+                     (spit "public/CNAME" "inside-out.matt.is"))}}

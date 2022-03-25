@@ -1,0 +1,23 @@
+{:deps {org.clojure/clojure {:mvn/version "1.11.0"}
+        org.clojure/clojurescript {:mvn/version "1.10.914"}
+        rewrite-clj/rewrite-clj {:mvn/version "1.0.644-alpha"}
+        applied-science/js-interop {:mvn/version "0.3.1"}
+        reagent/reagent {:mvn/version "1.1.0"}}
+ :aliases
+ {:dev {:extra-paths ["dev"]
+        :extra-deps {thheller/shadow-cljs {:mvn/version "2.16.12"}}}
+  :clerk {:extra-paths ["dev"]
+          :extra-deps {
+                       io.github.nextjournal/clerk {:git/url "https://github.com/nextjournal/clerk"
+                                                    :git/sha "f37c597c832ee8df78dcf9b007d1357c9193477a"
+                                                    #_#_:mvn/version "0.6.387"}
+                       mhuebert/kitchen-async {:mvn/version "0.1.0"}
+
+                       ;; for static build
+                       applied-science/js-interop {:mvn/version "0.3.3"}
+                       org.babashka/sci {:mvn/version "0.3.2"}
+                       reagent/reagent {:mvn/version "1.1.0"}
+                       io.github.babashka/sci-configs {:git/sha "fd6a3332f358e56b96b5a791f75f97573e018580"}
+                       io.github.nextjournal/viewers {:git/sha "45c094cebb2ed9783284b96387fa6f0b7f66e4ae"
+                                                      :exclusions [io.github.nextjournal/markdown]}
+                       metosin/reitit-frontend {:mvn/version "0.5.15"}}}}}
