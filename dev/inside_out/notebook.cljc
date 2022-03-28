@@ -1,10 +1,6 @@
 ;; # Inside-Out
 ;;
-;; a Clojure forms library _(alpha)_
-;;
-;; Feedback welcome: https://github.com/mhuebert/inside-out/discussions
-;;
-;; `{:git/url "https://github.com/mhuebert/inside-out" :git/sha "..."}`
+;; a Clojure forms library _(alpha - [feedback welcome](https://github.com/mhuebert/inside-out/discussions))_
 ;;
 ;; ## Features
 ;;
@@ -62,6 +58,7 @@
 
 ;; Fields like `?name` come from the "inside" of the form, but are lifted "out" into scope
 ;; so that you can use them in your UI. This is where the "Inside-Out" name comes from.
+;; In ClojureScript, `with-form` uses Reagent's `with-let` under the hood.
 
 ;; A form can take any shape, and the same field can be used more than once.
 
@@ -460,6 +457,25 @@
 
 ('?a add)
 
+;; ## Requirements and Constraints
+;;
+;; Or, what I was thinking about while writing this library.
+;;
+;; - A typical form is made up of multiple fields, which will be (somehow) combined for submission to some
+;;   endpoint (could be REST, graphql, Om Next, Pathom...). There's no single "shape" of data that works for
+;;   all use-cases. Originally I wanted to make a forms library that would work well for submitting triples
+;;   to a DataScript/Datomic-like system, but didn't like how it felt when the system made assumptions about shape.
+;; - A "field" is more than a value - it is information about the value & how it should be
+;;   represented to a person ("metadata") which tends to be re-used in many places.
+;; - Validation can happen on fields or forms. The messages returned by a validator function can depend on
+;;   a field's value, and may be returned asynchronously. A server/endpoint can also return validation/error
+;;   messages. We can re-use the machinery we build for validation for other purposes, like value-dependent
+;;   hints/instructions.
+;; - It's necessary to track "touched" and "focused" states in order to show/hide messages appropriately.
+;; - Most of the time we can infer what "attribute" a field would correspond to by its location in a parent
+;;   structure (eg. if the field is in the value position of a map, or in a `:db/add` vector)
+;;
+;;
 ;; # 🙏 NextJournal
 ;;
 ;; This library was made in collaboration with the folks at [NextJournal](https://www.nextjournal.com),
