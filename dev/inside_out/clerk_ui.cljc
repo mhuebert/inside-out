@@ -82,3 +82,22 @@
         (when (seq messages)
           (into [:div.mt-1] (map view-message) messages))])))
 
+#?(:cljs
+   (defn input-checkbox
+     "A text-input element that reads metadata from a ?field to display appropriately"
+     [?field attrs]
+     (let [messages (forms/visible-messages ?field)]
+       [:<>
+        [:input
+         (merge-props {:type "checkbox"
+                       :placeholder (:label ?field)
+                       :checked (boolean @?field)
+                       :on-change (fn [^js e] (.persist e) (js/console.log e) (reset! ?field (.. e -target -checked)))
+                       :on-blur (forms/blur-handler ?field)
+                       :on-focus (forms/focus-handler ?field)
+                       :class (when (:invalid (forms/types messages))
+                                "ring-2 ring-offset-2 ring-red-500 focus:ring-red-500")}
+                      attrs)]
+        (when (seq messages)
+          (into [:div.mt-1] (map view-message) messages))])))
+

@@ -347,3 +347,9 @@
 
 
 (defmacro form [expr & opts] `(inside-out.macros/form ~expr ~@opts))
+(defmacro try-submit!
+  "If form is submittable, evaluate and watch `promise`, otherwise touch form."
+  [form promise]
+  `(if (submittable? ~form)
+     (watch-promise ~form ~promise)
+     (touch! ~form)))

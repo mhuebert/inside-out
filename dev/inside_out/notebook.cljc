@@ -2,10 +2,15 @@
 ;;
 ;; a Clojure forms library _(alpha - [feedback welcome](https://github.com/mhuebert/inside-out/discussions))_
 ;;
+;; This library came out of work at NextJournal, looking for a better "forms" abstraction. We were annoyed
+;; at how often form-generation code promises "magic" and then delivers... well, too much of it.
+;; Originally intended as a tightly-coupled helper attached to a client triple-store, then stumbled into a
+;; more general & pleasing model.
+;;
 ;; ## Features
 ;;
 ;; 1. Efficient syntax for defining a form and its fields in one step. Each field stores a value,
-;;    and is used to create input components using `deref` and `reset!`. The form's "output" can be
+;;    and is used to create input components using `deref` and `reset!`. The form's "output" can take
 ;;    any shape.
 ;;
 ;; 2. A metadata system that eliminates boilerplate, encourages data-driven design, and handles
@@ -58,7 +63,8 @@
 
 ;; Fields like `?name` come from the "inside" of the form, but are lifted "out" into scope
 ;; so that you can use them in your UI. This is where the "Inside-Out" name comes from.
-;; In ClojureScript, `with-form` uses Reagent's `with-let` under the hood.
+
+;; In ClojureScript, `with-form` uses Reagent's `with-let` so that our form survives re-render.
 
 ;; A form can take any shape, and the same field can be used more than once.
 
@@ -106,16 +112,13 @@
     (str/join @cars)]))
 
 ;; This is quite different from giving each field a "path" or "cursor" into an atom,
-;;; another common approach to making forms, which requires that the "structure" of the form
-;;; is static. In fact, we can call a form like
-;; a function, passing in a map of bindings, and it will compute its expression using those values.
-;; (Here we use the `form` macro which creates a form but doesn't bring fields into scope like `with-form`):
-;;
+;; another common approach to making forms, which requires that the "structure" of the form
+;; is static.
 
 ;; ## Metadata
 
-;; A "field" is not just a piece of data, it's also information about what kind of data is acceptable,
-;; what it should be called, instructions for the user, and so on. We call this "metadata" and
+;; A "field" is not just a piece of data, it's also information about the data itself _(is it valid?)_
+;; and how it should be represented to a person _(what is it called?)_. We call this "metadata" and
 ;; have a few ways of providing it.
 
 ;; 1. Inline, by wrapping the field in a list: `(?name :init "Peter")`
@@ -126,7 +129,8 @@
 ;;
 ;; Examples:
 
-(with-form [form {:name ?name :email ?email}
+(with-form [form {:name ?name
+                  :email ?email}
             :init {?name "Peter"
                    ?email "Rabbit"}
             :required [?email]] ;; equivalent to {?email true}
@@ -339,30 +343,30 @@
 ;; Example using a :many field:
 
 (cljs
-  (with-form [!form [[:db/add 1 :person/pets
-                      ;; define a plural field by adding a :many key to the field.
-                      ;; it should contain a "template" for each item in the list.
-                      (?pets :many {:pet/id ?id
-                                    :pet/name (?name :init "Fido")})]]]
+ (with-form [!form [[:db/add 1 :person/pets
+                     ;; define a plural field by adding a :many key to the field.
+                     ;; it should contain a "template" for each item in the list.
+                     (?pets :many {:pet/id ?id
+                                   :pet/name (?name :init "Fido")})]]]
 
-    [:div
-     [ui/show-code (str @!form)]
+   [:div
+    [ui/show-code (str @!form)]
 
-     (doall
-      ;; call (seq ?pets) to get a list of fields, which can be destructured using :syms
-      ;; to get the child bindings.
-      (for [{:as ?pet :syms [?id ?name]} ?pets]
-        [:div.flex.items-center.my-2
-         {:key @?id}
-         [managed-text-input ?name {:placeholder "Name"}]
-         [:div.text-red-500.hover:underline.hover:cursor-pointer.mx-3.font-bold
-          ;; call forms/remove-many-child! to remove an item
-          {:on-click #(forms/remove-many! ?pet)} "X"]]))
+    (doall
+     ;; call (seq ?pets) to get a list of fields, which can be destructured using :syms
+     ;; to get the child bindings.
+     (for [{:as ?pet :syms [?id ?name]} ?pets]
+       [:div.flex.items-center.my-2
+        {:key @?id}
+        [managed-text-input ?name {:placeholder "Name"}]
+        [:div.text-red-500.hover:underline.hover:cursor-pointer.mx-3.font-bold
+         ;; call forms/remove-many-child! to remove an item
+         {:on-click #(forms/remove-many! ?pet)} "X"]]))
 
-     [:div.my-3.text-blue-500.hover:underline.hover:cursor-pointer
-      ;; to add an item, call form/add-many-child! with ?pets and a map of bindings,
-      ;; using quoted symbols for keys {'?field, value}
-      {:on-click #(forms/add-many! ?pets {'?id (rand-int 1000)})} "Add Pet"]]))
+    [:div.my-3.text-blue-500.hover:underline.hover:cursor-pointer
+     ;; to add an item, call form/add-many-child! with ?pets and a map of bindings,
+     ;; using quoted symbols for keys {'?field, value}
+     {:on-click #(forms/add-many! ?pets {'?id (rand-int 1000)})} "Add Pet"]]))
 
 ;; To specify metadata targeting the children of a plural field, use the :child-meta key:
 
@@ -377,42 +381,48 @@
 
 ;; ## Server submission
 
-;; The `forms/submittable?` and `forms/watch-promise` functions facilitate submission of a form
-;; to a remote endpoint.
+;; `try-submit!` facilitates submission of a form's contents to a remote endpoint. What happens:
+;; - We check if the form can be submitted  using `submittable?`
+;; - If no, we 'touch' the form so that validation/error messages will appear
+;; - If yes, we evaluate the promise and call `watch-promise`.
 
-;; `forms/watch-promise` sets `:loading?` to true, clears any old remote messages, and then waits for
-;; the promise to complete. Then `:loading?` is removed, and remote messages are set to the resolved value.
+;; `watch-promise` sets `:loading?` to true and clears old remote messages immediately. When the
+;; resolves, `:loading?` is removed and remote messages are set to the resolved value.
 ;;
 ;; The following example includes buttons that show how to handle a successful or failed response.
 
 (cljs
-  (with-form [form {:name (?name :init "Sue")}]
-    [:div
-     [ui/input-text ?name {}]
-     [:pre.text-xs.whitespace-pre-wrap (str @form)]
-     (into [:div]
-           (map ui/view-message (if (:loading? form)
-                                  (forms/wrap-message "Loading...")
-                                  (forms/visible-messages form))))
-     [:button.bg-blue-500.text-white.p-3.m-3
-      {:on-click
-       #(forms/watch-promise form
-          (p/let [name @?name
-                  result (p/timeout 500)]
-            (forms/clear! form)
-            {:messages (str "Thanks, " name "!")}))}
-      "Submit-Success"]
-     [:button.bg-red-500.text-white.p-3.m-3
-      {:on-click
-       #(forms/watch-promise form
-          (p/let [name @?name
-                  result (p/timeout 500)]
-            {:error (str "Sorry " name ", an error occurred.")}))}
-      "Submit-Error"]]))
+ (with-form [form {:name (?name :init "Sue")
+                   :accepted-terms ?accepted}
+             :form/validators [(fn [{:keys [accepted-terms]} _]
+                                 (when-not accepted-terms
+                                   {:type :invalid
+                                    :content "Must accept terms"}))]]
+   [:div
+    [ui/input-text ?name]
+    [:label.flex.flex-row.items-center [ui/input-checkbox ?accepted] "Accept terms?"]
+    [:pre.text-xs.whitespace-pre-wrap (str @form)]
+    (into [:div]
+          (map ui/view-message (if (:loading? form)
+                                 (forms/wrap-message "Loading...")
+                                 (forms/visible-messages form))))
+    [:button.bg-blue-500.text-white.p-3.m-3
+     {:on-click #(forms/try-submit! form
+                   (p/let [name @?name
+                           result (p/timeout 500)]
+                     {:messages (str "Thanks, " name "!")}))}
+     "Submit-Success"]
+    [:button.bg-red-500.text-white.p-3.m-3
+     {:on-click
+      #(forms/try-submit! form
+         (p/let [name @?name
+                 result (p/timeout 500)]
+           {:error (str "Sorry " name ", an error occurred.")}))}
+     "Submit-Error"]]))
 
 ;; `forms/clear!` resets a form to its initial state
-(cljs
 
+(cljs
  (with-form [!form {:a ?a
                     :b (?b :init "B")
                     :c ?c
@@ -439,7 +449,6 @@
 ;; like `with-let` ("finally" behaviour is not required). See `inside-out.reagent` for macro implementation.
 
 ;; ## The 'form' macro
-
 
 ;; Our macros turn the "expression" of a form into a function whose arguments are its fields.
 ;; In fact, we can call a form as a function, and pass in a map of bindings:
