@@ -2,7 +2,8 @@
   (:refer-clojure :exclude [meta])
   (:require [clojure.walk :as walk]
             [clojure.zip :as z]
-            [inside-out.util :as util]))
+            [inside-out.util :as util]
+            [clojure.string :as str]))
 
 (defn replace-toplevel [pmap forms]
   (map (fn [x]
@@ -120,11 +121,7 @@
 
 (defn inline-meta [field]
   (when (list? field)
-    (let [args (if (keyword? (second field))
-                 (rest field)
-                 (concat [:many (second field)]
-                         (drop 2 field)))]
-      (apply hash-map args))))
+    (apply hash-map (rest field))))
 
 ;; metadata inference: you can pass your own `:infer-meta` function as an option to `with-form*`
 ;; if these are not sufficient for your use-case
@@ -148,7 +145,31 @@
 (def default-infer [infer-from-map-value
                     infer-from-tx-value])
 
+(defn ns-ify
+  "For a keyword :a.b.c, turns first segment into namespace."
+  [kw]
+  (let [kw-name (name kw)
+        parts (str/split kw-name #"\.")]
+    (if (> (count parts) 1)
+      (keyword (first parts) (str/join "." (rest parts)))
+      (keyword kw-name))))
 
+(defn lift-ns [m ns]
+  (let [ns-name (name ns)]
+    (reduce-kv (fn [out k v]
+                 (cond-> out
+                         (= ns-name (namespace k))
+                         (assoc (ns-ify (name k)) v))) {} m)))
+
+(comment
+ (lift-ns {:form/a.b 1 :form/b.c 2 :other 3} :form))
+
+(defn dissoc-ns [m ns]
+  (let [ns-name (name ns)]
+    (reduce (fn [out k]
+              (cond-> out
+                      (= ns-name (namespace k))
+                      (dissoc k))) m (keys m))))
 
 (defn analyze-form
   ([form] (analyze-form form {}))
@@ -185,30 +206,32 @@
                    `(fn [~bindings]
                       (let [~@(mapcat (fn [sym] [(unquote-it sym) `(get ~bindings '~sym)]) (keys fields))]
                         ~return)))
-         ;; handle :required sugar
-         [options fields] [(dissoc options :required)
-                           (reduce (fn [fields required-sym]
-                                     (cond-> fields
-                                             (fields required-sym)
-                                             (assoc-in [required-sym :required?] true)))
-                                   fields
-                                   (:required options))]
-         ;; handle :init sugar
-         [options fields] [(dissoc options :init)
-                           (reduce-kv (fn [fields sym init]
-                                        (cond-> fields
-                                                (fields sym)
-                                                (assoc-in [sym :init] init)))
-                                      fields
-                                      (:init options))]
-         ;; handle :meta - support non-quoted fields
-         options (cond-> options
-                         (map? (:meta options))
-                         (update :meta update-keys quote-field-sym))]
+         ;; all other fields are assumed to be <key> {?field <value>}
+         fields (reduce-kv
+                 (fn [fields meta-k values]
+                   (cond (map? values)
+                         (reduce-kv (fn [fields sym value]
+                                      (cond-> fields
+                                              (fields sym)
+                                              (assoc-in [sym meta-k] value))) fields values)
+                         (vector? values)
+                         (reduce (fn [fields sym]
+                                   (cond-> fields
+                                           (fields sym)
+                                           (assoc-in [sym meta-k] true))) fields values)))
+                 fields
+                 (-> options
+                     (dissoc :meta)
+                     (dissoc-ns :form)))
+         ;; handle form metadata
+         form-meta (merge {:meta (cond-> (:meta options)
+                                         (map? (:meta options))
+                                         (update-keys quote-field-sym))}
+                          (lift-ns options :form))]
      {:form/fields fields
       :form/return return
       :form/compute compute
-      :form/meta (dissoc options :infer-meta)})))
+      :form/meta form-meta})))
 
 (comment
 

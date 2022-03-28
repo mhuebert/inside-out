@@ -1,4 +1,4 @@
-(ns inside-out.clerk-ui
+(ns ^:nextjournal.clerk/no-cache inside-out.clerk-ui
   (:require applied-science.js-interop
             [clojure.string :as str]
             [inside-out.forms :as forms]
@@ -13,11 +13,11 @@
 
 ;; our API is a `hiccup` macro which will compile the contents as ClojureScript
 ;; and render it using Reagent.
-(defmacro hiccup [expr]
-  (let [name (symbol (str "reagent-view-" (hash expr)))]
+(defmacro cljs [& exprs]
+  (let [name (symbol (str "reagent-view-" (hash exprs)))]
     (if (:ns &env)
       ;; in ClojureScript, define a function
-      `(defn ~(with-meta name {:export true}) [] ~expr)
+      `(defn ~(with-meta name {:export true}) [] ~@exprs)
       ;; in Clojure, return a map with a reference to the fully qualified sym
       {:reagent/var `'~(symbol (str *ns*) (str name))})))
 

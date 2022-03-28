@@ -12,7 +12,7 @@
 ;; intended to be overridden via set! in cljs
 ;; intended use case is defining attribute-metadata globally
 ;; eg {:person/name {:label "Name"}}
-(def ^:dynamic *global-meta* {})
+(def global-meta {})
 
 (declare closest)
 
@@ -79,7 +79,7 @@
   (let [inherited-meta (->> (iterate inside-out.forms/parent parent)
                             (into () (comp (take-while identity)
                                            (keep #(:meta (.-metadata ^Field %)))))
-                            (cons *global-meta*)
+                            (cons global-meta)
                             (into {}
                                   (map #(cond->> (% sym)
                                                  attribute (concat (% attribute))))))
@@ -195,7 +195,7 @@
 (defn compute-messages
   ([field]
    (compute-messages @field (cond->> (:validators field)
-                                     (:required? field)
+                                     (:required field)
                                      (concat [:required])) (field-context field)))
   ([value validators context]
    (->> validators
@@ -232,18 +232,18 @@
                        (case (:type message)
                          ;; show invalid when touched
                          :invalid :touched
-                         ;; show info when focused
-                         :info :focused
-                         ;; any other type, always show
+                         ;; show hint when focused
+                         :hint :focused
+                         ;; any other type (or no type), always show
                          :always))]
     (or (= :always visibility)
         (and touched? (= :touched visibility))
         (and focused? (= :focused visibility)))))
 
 (def message-order
-  ;; show errors above info
+  ;; show errors above hint
   {:invalid 1
-   :info 2})
+   :hint 2})
 
 (def nonbreaking-space "the &nbsp; character (for taking up space when no messages are present)"
   \u00A0)
