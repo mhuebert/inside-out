@@ -2,10 +2,8 @@
 ;;
 ;; a Clojure forms library _(alpha - [feedback welcome](https://github.com/mhuebert/inside-out/discussions))_
 ;;
-;; This library came out of work at NextJournal, looking for a better "forms" abstraction. We were annoyed
+;; This library arose while searching for a better "forms" abstraction for NextJournal. We were annoyed
 ;; at how often form-generation code promises "magic" and then delivers... well, too much of it.
-;; Originally intended as a tightly-coupled helper attached to a client triple-store, then stumbled into a
-;; more general & pleasing model.
 ;;
 ;; ## Features
 ;;
@@ -43,7 +41,7 @@
 ;; What do we see here?
 ;;
 ;; 1. `with-form` creates a new "form" called `contact-info`.
-;; 1. The shape of the form is `{:name ?name}`. This is what we "get back" when we deref the form,
+;; 1. The shape of this form is `{:name ?name}`. This is what we "get back" when we deref the form,
 ;;    eg. `@contact-info`.
 ;; 1. The form has one field, `?name`. Every symbol that starts with `?` will become a field.
 ;;    We `@deref` and `reset!` fields to read/write them.
@@ -75,7 +73,7 @@
   @!form)
 
 ;; Initial field values can be supplied via `:init` metadata on a field. We can add
-;; "inline" metadata by wrapping the field in a list, and adding key-value pairs after it:
+;; "inline" metadata by wrapping the field in a list, with key-value pairs:
 
 (with-form [contact-info {:name (?name :init "Peter")}]
   @contact-info)
@@ -92,8 +90,7 @@
 
 ;; ## A form's shape
 ;;
-;; A form can be any expression, so fields do not have to map 1:1 to "locations" in
-;; the form.
+;; A form can be any expression, so fields do not have to map 1:1 to "locations" in the form.
 
 (with-form [cars (take ?number (repeat "🚙"))
             :init {?number 3}]
@@ -245,7 +242,8 @@
 
 ;; ### Validator functions
 
-;; A validator is a function with the signature `(value, context) => [...message]`
+;; A validator is a function with the signature `(value, context) => [...message]` where `context`
+;; is a map of sibling fields.
 ;;
 ;; A message is a map containing:
 ;; - `:type`
@@ -321,7 +319,7 @@
 
 ;; Calling `seq` or otherwise iterating over a "plural" field returns a list of its child fields,
 ;; whose bindings can be read from the field using their names (quoted symbols). When providing
-;; `:initial-children` for a plural field, each child should be a map of bindings as shown below.
+;; `:init` for a plural field, each child should be a map of bindings as shown below.
 
 (with-form [!form (?features :many {:name (str/upper-case ?name)})
             :init {?features [{'?name "Herman"}
