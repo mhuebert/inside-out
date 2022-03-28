@@ -13,7 +13,7 @@ jobs:
             path: |
               .cpcache
               .shadow-cljs
-            key: ${{ hashFiles('deps.edn') }}-${{ hashFiles('yarn.lock') }}
+            key: 1
 
       - uses: actions/checkout@v3
       - name: Install clojure tools
