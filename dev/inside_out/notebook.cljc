@@ -2,7 +2,7 @@
 ;;
 ;; a Clojure forms library _(alpha)_
 ;;
-;; Feedback is welcome: https://github.com/mhuebert/inside-out/discussions
+;; Feedback welcome: https://github.com/mhuebert/inside-out/discussions
 ;;
 ;; `{:git/url "https://github.com/mhuebert/inside-out" :git/sha "..."}`
 ;;
