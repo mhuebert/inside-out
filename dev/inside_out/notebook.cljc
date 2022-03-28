@@ -387,7 +387,7 @@
 ;; - If yes, we evaluate the promise and call `watch-promise`.
 
 ;; `watch-promise` sets `:loading?` to true and clears old remote messages immediately. When the
-;; resolves, `:loading?` is removed and remote messages are set to the resolved value.
+;; resolves, `:loading?` is removed and remote messages are set to (:message return-value)
 ;;
 ;; The following example includes buttons that show how to handle a successful or failed response.
 
@@ -410,14 +410,16 @@
      {:on-click #(forms/try-submit! form
                    (p/let [name @?name
                            result (p/timeout 500)]
-                     {:messages (str "Thanks, " name "!")}))}
+                     {:message (str "Thanks, " name "!")}))}
      "Submit-Success"]
     [:button.bg-red-500.text-white.p-3.m-3
      {:on-click
       #(forms/try-submit! form
          (p/let [name @?name
                  result (p/timeout 500)]
-           {:error (str "Sorry " name ", an error occurred.")}))}
+           {:message
+            {:type :error
+             :content (str "Sorry " name ", an error occurred.")}}))}
      "Submit-Error"]]))
 
 ;; `forms/clear!` resets a form to its initial state

@@ -292,14 +292,11 @@
       and wrapped as {:type :error, :content error}"
      [form promise]
      (let [meta-atom (!meta form)
-           complete! (fn [{:as result :keys [messages error]}]
+           complete! (fn [{:as result :keys [message]}]
                        (macros/swap-> meta-atom
                                       (dissoc :loading?)
                                       (assoc :remote-messages
-                                             (wrap-message
-                                               (if error
-                                                 {:type :error :content error}
-                                                 messages))))
+                                             (wrap-message message)))
                        result)]
        (macros/swap-> meta-atom
                       (assoc :loading? true)
