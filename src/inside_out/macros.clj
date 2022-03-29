@@ -271,9 +271,12 @@
         _ (assert (every? keyword? (keys options)) (str "Invalid options (not a keyword: " (remove keyword? (keys options)) ")"))
         {:form/keys [fields compute meta]} (analyze-form expr (merge analyzer-options options))]
     `(~let-form [~root-sym (~'inside-out.forms/root ~compute ~meta ~(vec (vals fields)))
-                 ~@(->> (keys fields)
-                        (mapcat (fn [sym]
-                                  [sym `(get ~root-sym '~sym)])))]
+                 ~@(->> fields
+                        (mapcat (fn [[sym {:keys [many]}]]
+                                  [(cond-> sym
+                                           many
+                                           (with-meta {:many/bindings (->> many :many/fields keys vec)}))
+                                   `(get ~root-sym '~sym)])))]
       ~@body)))
 
 (defmacro form [expr & {:as options}]

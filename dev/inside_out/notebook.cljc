@@ -2,20 +2,18 @@
 ;;
 ;; a Clojure forms library _(alpha - [feedback welcome](https://github.com/mhuebert/inside-out/discussions))_
 ;;
-;; This library arose while searching for a better "forms" abstraction for NextJournal. We were annoyed
-;; at how often form-generation code promises "magic" and then delivers... well, too much of it.
-;;
 ;; ## Features
 ;;
-;; 1. Efficient syntax for defining a form and its fields in one step. Each field stores a value,
-;;    and is used to create input components using `deref` and `reset!`. The form's "output" can take
-;;    any shape.
+;; 1. Concise syntax for defining a form and its fields in one step. Each field stores a value, and behaves
+;;    like an atom (read/write with `@deref` and `reset!`). The form's "output" is computed from its fields
+;;    and can take any shape.
 ;;
-;; 2. A metadata system that eliminates boilerplate, encourages data-driven design, and handles
-;;    common concerns like validation, hints, and error messages.
+;; 2. A metadata system that encourages data-driven design & code re-use, while handling common concerns like
+;;    validation, hints, and error messages to support a high quality UX.
 ;;
-;; Explicit design goal: avoid "bad magic", abstractions that do too much and become hard to
-;; understand or customize later.
+;; ## Motivation
+;;
+;; Can we have nice things?
 ;;
 ;; ## Namespace Setup
 ;;
@@ -298,17 +296,16 @@
     [:pre (str "valid? " (forms/valid? form))]
     [:pre (str @form)]]))
 
-;; ## Plural fields
+;; ## Plural fields (`:many`)
 
-;; A plural field (eg. `:db.cardinality.many`) can be modeled by wrapping a field in a list containing
-;; the `?field` symbol for the list, followed by the "template" for each child.
-;; Add and remove fields using `forms/add-many!` and `forms/remove-many!`, passing
-;; a map of _bindings_ for each child's fields:
+;; A "plural" field can be modeled by passing a "template" for each child as `:many` inline metadata.
+;; The child-template can include fields. Add and remove children using `forms/add-many!` and
+;; `forms/remove-many!`, passing in a map of bindings for the child's fields.
 
 (with-form [!form {:features (?features :many
                                         {:name (str/upper-case ?name)
                                          :enabled? ?enabled})}
-            :meta {?enabled {:init true}}]
+            :init {?enabled true}]
 
   ;; add two child elements:
   (forms/add-many! ?features {'?name "Paint"}
@@ -320,6 +317,7 @@
 ;; Calling `seq` or otherwise iterating over a "plural" field returns a list of its child fields,
 ;; whose bindings can be read from the field using their names (quoted symbols). When providing
 ;; `:init` for a plural field, each child should be a map of bindings as shown below.
+
 
 (with-form [!form (?features :many {:name (str/upper-case ?name)})
             :init {?features [{'?name "Herman"}
@@ -358,11 +356,11 @@
         {:key @?id}
         [managed-text-input ?name {:placeholder "Name"}]
         [:div.text-red-500.hover:underline.hover:cursor-pointer.mx-3.font-bold
-         ;; call forms/remove-many-child! to remove an item
+         ;; call forms/remove-many! to remove an item
          {:on-click #(forms/remove-many! ?pet)} "X"]]))
 
     [:div.my-3.text-blue-500.hover:underline.hover:cursor-pointer
-     ;; to add an item, call form/add-many-child! with ?pets and a map of bindings,
+     ;; to add an item, call form/add-many! with ?pets and a map of bindings,
      ;; using quoted symbols for keys {'?field, value}
      {:on-click #(forms/add-many! ?pets {'?id (rand-int 1000)})} "Add Pet"]]))
 
@@ -379,14 +377,15 @@
 
 ;; ## Server submission
 
-;; `try-submit!` facilitates submission of a form's contents to a remote endpoint. What happens:
-;; - We check if the form can be submitted  using `submittable?`
-;; - If no, we 'touch' the form so that validation/error messages will appear
-;; - If yes, we evaluate the promise and call `watch-promise`.
+;; `watch-promise` communicates the status of a promise through a field's metadata as follows:
+;; 1. `:loading?` is immediately set to `true` and `:remote-messages` are cleared,
+;; 2. When the promise resolves, `:loading?` is removed and `:remote-messages` are set to (:message return-value)
 
-;; `watch-promise` sets `:loading?` to true and clears old remote messages immediately. When the
-;; resolves, `:loading?` is removed and remote messages are set to (:message return-value)
-;;
+;; The `try-submit!` macro builds on this to manage submission of a form to a remote endpoint:
+;; 1. We check if the form can be submitted using `submittable?`,
+;; 2. If no, we 'touch' the form so that validation/error messages will appear,
+;; 3. If yes, we evaluate the promise and call `watch-promise`.
+
 ;; The following example includes buttons that show how to handle a successful or failed response.
 
 (cljs

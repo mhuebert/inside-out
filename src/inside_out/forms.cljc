@@ -17,43 +17,43 @@
 (declare closest)
 
 (macros/support-clj-protocols
- (deftype Field [parent compute !state metadata !meta !children]
-   ISeqable
-   (-seq [o]
-     (if (:many metadata)
-       (seq (map @!children @!state))
-       (seq (vals @!children))))
-   ILookup
-   (-lookup [o k]
-     (if (symbol? k)
-       (get @!children k)
-       (macros/some-or (@!meta k)
-                       (metadata k)
-                       (when (= k :touched?) (closest parent :touched?)))))
-   (-lookup [o k nf] (macros/some-or (get o k) nf))
+  (deftype Field [parent compute !state metadata !meta !children]
+    ISeqable
+    (-seq [o]
+      (if (:many metadata)
+        (seq (map @!children @!state))
+        (seq (vals @!children))))
+    ILookup
+    (-lookup [o k]
+      (if (symbol? k)
+        (get @!children k)
+        (macros/some-or (@!meta k)
+                        (metadata k)
+                        (when (= k :touched?) (closest parent :touched?)))))
+    (-lookup [o k nf] (macros/some-or (get o k) nf))
 
-   IDeref
-   (-deref [o]
-     (cond compute (compute (update-vals @!children deref))
-           (:many metadata) (mapv (comp deref @!children) @!state)
-           :else @!state))
+    IDeref
+    (-deref [o]
+      (cond compute (compute (update-vals @!children deref))
+            (:many metadata) (mapv (comp deref @!children) @!state)
+            :else @!state))
 
-   IReset
-   (-reset! [o new-value]
-     (reset! !state new-value))
+    IReset
+    (-reset! [o new-value]
+      (reset! !state new-value))
 
-   IMeta
-   (-meta [o] (merge metadata @!meta))
+    IMeta
+    (-meta [o] (merge metadata @!meta))
 
-   IWithMeta
-   (-with-meta [o meta] (Field. parent compute !state meta !meta !children))
-   IFn
-   (-invoke [this bindings]
-     (if-let [many (:many metadata)]
-       (mapv (:many/compute many) bindings)
-       (do
-         (assert compute (str (:sym metadata) " is a simple field not associated with an expression."))
-         (compute bindings))))))
+    IWithMeta
+    (-with-meta [o meta] (Field. parent compute !state meta !meta !children))
+    IFn
+    (-invoke [this bindings]
+      (if-let [many (:many metadata)]
+        (mapv (:many/compute many) bindings)
+        (do
+          (assert compute (str (:sym metadata) " is a simple field not associated with an expression."))
+          (compute bindings))))))
 
 (defn compute [field bindings] (field bindings))
 
@@ -105,7 +105,7 @@
 (defn remove-binding! [child]
   (swap! (!children (parent child)) dissoc (:sym child)))
 
-(defn blank-many-child [field & [bindings]]
+(defn- blank-many-child [field & [bindings]]
   (assert (:many field) (str (:sym field) " is not :many"))
   (let [{:many/keys [compute fields]} (:many field)
         list-child (make-field field compute (merge {:sym (gensym 'list-child-)}
@@ -296,14 +296,14 @@
                        (macros/swap-> meta-atom
                                       (dissoc :loading?)
                                       (assoc :remote-messages
-                                             (wrap-message message)))
+                                        (wrap-message message)))
                        result)]
        (macros/swap-> meta-atom
                       (assoc :loading? true)
                       (dissoc :remote-messages))
-          (-> promise
-              (j/call :then complete!)
-              (j/call :catch (fn [e] (complete! {:error (ex-message e)})))))))
+       (-> promise
+           (j/call :then complete!)
+           (j/call :catch (fn [e] (complete! {:error (ex-message e)})))))))
 
 (defn clear!
   "Resets the form to initial values"
@@ -350,3 +350,11 @@
   `(if (submittable? ~form)
      (watch-promise ~form ~promise)
      (touch! ~form)))
+
+(defmacro for-many [[as ?field] expr]
+  (let [bindings (-> &env (find ?field) key meta :many/bindings)]
+    `(doall
+      (for [field# ~?field]
+        (let [{:syms ~(mapv second bindings)} field#
+              ~as field#]
+          ~expr)))))
