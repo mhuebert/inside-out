@@ -3,7 +3,7 @@
 See [Inside-Out: Documentation](https://github.com/mhuebert/inside-out/blob/main/dev/inside_out/notebook.cljc)
 
 ```clj 
-mhuebert/inside-out {:git/sha "..."}
+io.github.mhuebert/inside-out {:git/sha "..."}
 ```
 
 A tool for writing forms. Syntax is minimal, and lets us focus on essential concerns: what is our target

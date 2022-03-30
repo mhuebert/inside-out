@@ -8,8 +8,7 @@
         :extra-deps {thheller/shadow-cljs {:mvn/version "2.16.12"}}}
   :clerk {:extra-paths ["dev"]
           :extra-deps {
-                       io.github.nextjournal/clerk {:git/url "https://github.com/nextjournal/clerk"
-                                                    :git/sha "f37c597c832ee8df78dcf9b007d1357c9193477a"
+                       io.github.nextjournal/clerk {:git/sha "0b0cb64f1d2d441aeaf78c05b8b450222afc2480"
                                                     #_#_:mvn/version "0.6.387"}
                        mhuebert/kitchen-async {:mvn/version "0.1.0"}
 

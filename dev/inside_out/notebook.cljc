@@ -21,10 +21,10 @@
 ;; You can mostly ignore this step. Only take note of
 ;; `[inside-out.forms :as forms]` and `[inside-out.reagent :refer [with-form]]`.
 
-;; **deps:** `{mhuebert/inside-out {:git/sha "..."}}`
+;; **deps:** `{io.github.mhuebert/inside-out {:git/sha "..."}}`
 
-^:nextjournal.clerk/toc?
-(ns ^:nextjournal.clerk/no-cache inside-out.notebook
+^#:nextjournal.clerk{:toc :pin :no-cache true}
+(ns inside-out.notebook
   (:require [inside-out.forms :as forms]
             [inside-out.reagent :refer [with-form]]
 
