@@ -8,7 +8,7 @@
         :extra-deps {thheller/shadow-cljs {:mvn/version "2.16.12"}}}
   :clerk {:extra-paths ["dev"]
           :extra-deps {
-                       io.github.nextjournal/clerk {:git/sha "0b0cb64f1d2d441aeaf78c05b8b450222afc2480"
+                       io.github.nextjournal/clerk {:git/sha "00336adedcc6c8971ebb0eda2a117eb965570c5e"
                                                     #_#_:mvn/version "0.6.387"}
                        mhuebert/kitchen-async {:mvn/version "0.1.0"}
 
@@ -17,6 +17,6 @@
                        org.babashka/sci {:mvn/version "0.3.2"}
                        reagent/reagent {:mvn/version "1.1.0"}
                        io.github.babashka/sci-configs {:git/sha "fd6a3332f358e56b96b5a791f75f97573e018580"}
-                       io.github.nextjournal/viewers {:git/sha "45c094cebb2ed9783284b96387fa6f0b7f66e4ae"
+                       io.github.nextjournal/viewers {:git/sha "1b689a03307a646ddc5d720cf9a15b325a779d77"
                                                       :exclusions [io.github.nextjournal/markdown]}
                        metosin/reitit-frontend {:mvn/version "0.5.15"}}}}}

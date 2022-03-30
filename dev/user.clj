@@ -2,6 +2,7 @@
   (:require [nextjournal.clerk :as clerk]
             [nextjournal.clerk.config :as config]
             [inside-out.clerk-ui :as io-clerk]
+            nextjournal.clerk.view
             [clojure.string :as str]))
 
 (def show! clerk/show!)
@@ -12,6 +13,7 @@
   (clerk/serve! {:browse? true
                  :watch-paths ["dev"]
                  :show-filter-fn #(str/includes? % "notebooks")})
+  (Thread/sleep 200)
   (clerk/show! "dev/inside_out/notebook.cljc"))
 
 (defn publish! [_]
