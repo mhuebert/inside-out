@@ -13,7 +13,7 @@
 ;;    and can take any shape.
 ;;
 ;; 2. A metadata system that encourages data-driven design & code re-use, while handling common concerns like
-;;    validation, hints, and error messages to support a high quality UX. ;; Forms should be "driven by data"
+;;    validation, hints, and error messages to support a high quality UX. Forms should be "driven by data"
 ;;    but avoid impenetrable indirection - don't break "jump to source".
 ;;
 ;; ## Namespace Setup
