@@ -11,9 +11,13 @@
 ;; 2. A metadata system that encourages data-driven design & code re-use, while handling common concerns like
 ;;    validation, hints, and error messages to support a high quality UX.
 ;;
-;; ## Motivation
+;; ## Goals
 ;;
-;; Can we have nice things?
+;; - Pithy yet readable syntax
+;; - Elimination of boilerplate/repetition _without_ impenetrable indirection (should be possible to "jump to
+;;    source" to see where data comes from)
+;; - **Not** a library of form controls: that's for userspace. Rather - provide tools to efficiently create any
+;;   any kind of input component without having to re-implement tricky logic for each one.
 ;;
 ;; ## Namespace Setup
 ;;
@@ -64,11 +68,11 @@
 
 ;; A form can take any shape, and the same field can be used more than once.
 
-(with-form [!form [[:db/add 1 :person/pet ?pet-id]
-                   [:db/add ?pet-id :pet/name ?pet-name]]]
+(with-form [form [[:db/add 1 :person/pet ?pet-id]
+                  [:db/add ?pet-id :pet/name ?pet-name]]]
   (reset! ?pet-id 2)
   (reset! ?pet-name "Fido")
-  @!form)
+  @form)
 
 ;; Initial field values can be supplied via `:init` metadata on a field. We can add
 ;; "inline" metadata by wrapping the field in a list, with key-value pairs:
@@ -143,11 +147,11 @@
 ;; 2. when a field is in the value position of a `:db/add` vector:
 ;;    `[:db/add <id> <attribute> ?field]`
 
-(with-form [!form {:pet/id ?pet-id}]
+(with-form [form {:pet/id ?pet-id}]
   ;; attribute is inferred from key in a map
   (:attribute ?pet-id))
 
-(with-form [!form [[:db/add 1 :person/name ?name]]]
+(with-form [form [[:db/add 1 :person/name ?name]]]
   ;; attribute is inferred based on position in a :db/add vector
   (:attribute ?name))
 
@@ -160,7 +164,7 @@
 
 ;; We can pass that in as a :meta option:
 
-(with-form [!form [[:db/add 1 :person/name ?name]]
+(with-form [form [[:db/add 1 :person/name ?name]]
             :meta app-attributes]
   (:label ?name))
 
@@ -179,7 +183,7 @@
 ;; Now it is available globally:
 
 (cljs
- (with-form [!form [[:db/add 1 :person/name ?name]]]
+ (with-form [form [[:db/add 1 :person/name ?name]]]
    (:field/label ?name)))
 
 ;; ## Validation
@@ -187,7 +191,7 @@
 ;; Fields may specify a list of `:validators` are called on-demand when we read
 ;; a field's "messages" via `(forms/messages ?field)`.
 
-(with-form [!form [[:db/add 1 :person/name ?name]]
+(with-form [form [[:db/add 1 :person/name ?name]]
             :meta {?name {:validators [(forms/min-length 3)]}}]
 
   (reset! ?name "ma")
@@ -201,11 +205,11 @@
     {:type :invalid
      :content "Child must be younger than parent"}))
 
-(with-form [!form [{:db/add 1
-                    :parent/age ?parent-age}
-                   {:db/id 2
-                    :child/parent 1
-                    :child/age (?child-age :validators [validate-child-age])}]]
+(with-form [form [{:db/add 1
+                   :parent/age ?parent-age}
+                  {:db/id 2
+                   :child/parent 1
+                   :child/age (?child-age :validators [validate-child-age])}]]
   (reset! ?parent-age 10)
   (reset! ?child-age 20)
   (forms/messages ?child-age))
@@ -213,30 +217,30 @@
 
 ;; Validators for the form itself can be passed using a :form/validators option
 
-(with-form [!form {:system/id 1
-                   :phone/mobile ?mobile
-                   :phone/landline ?landline}
+(with-form [form {:system/id 1
+                  :phone/mobile ?mobile
+                  :phone/landline ?landline}
             :form/validators [(fn [_ {:syms [?mobile ?landline]}]
                                 (when-not (or @?mobile @?landline)
                                   {:type :invalid
                                    :content "At least one phone number must be supplied"}))]]
   ;; form becomes valid after adding a value for ?mobile
-  [(forms/valid? !form)
+  [(forms/valid? form)
    (do (reset! ?mobile "+49 555 5555555")
-       (forms/valid? !form))])
+       (forms/valid? form))])
 
 ;; A `:required` option may be passed with a list of required fields
 
-(with-form [!form {:name ?name :email ?email :phone ?phone}
+(with-form [form {:name ?name :email ?email :phone ?phone}
             :required [?name ?email ?phone]]
-  (forms/messages !form :deep true))
+  (forms/messages form :deep true))
 
 ;; Or, include `:required true` in a field's metadata
 
-(with-form [!form {:name (?name :required true)
-                   :email ?email}
+(with-form [form {:name (?name :required true)
+                  :email ?email}
             :meta {?email {:required true}}]
-  (forms/messages !form :deep true))
+  (forms/messages form :deep true))
 
 ;; ### Validator functions
 
@@ -296,57 +300,53 @@
     [:pre (str "valid? " (forms/valid? form))]
     [:pre (str @form)]]))
 
-;; ## Plural fields (`:many`)
+;; ## Plural fields (subforms)
 
-;; A "plural" field can be modeled by passing a "template" for each child as `:many` inline metadata.
-;; The child-template can include fields. Add and remove children using `forms/add-many!` and
-;; `forms/remove-many!`, passing in a map of bindings for the child's fields.
+;; A field may contain multiple "child" elements. Define a plural field by passing a
+;; `:many` option with the template for each child. To supply initial values, pass in
+;; a collection of bindings as `:init`.
 
-(with-form [!form {:features (?features :many
-                                        {:name (str/upper-case ?name)
-                                         :enabled? ?enabled})}
-            :init {?enabled true}]
+(with-form [form (?features :many {:name ?feature-name}
+                            :init [{'?feature-name "My Great Feature"}])]
+  @?features)
 
-  ;; add two child elements:
-  (forms/add-many! ?features {'?name "Paint"}
-                   {'?name "Wheels"
-                    '?enabled false})
+;; Add a child using `forms/add-many!`:
+
+(with-form [form (?features :many {:name ?feature-name})]
+
+  ;; add a child:
+  (forms/add-many! ?features {'?feature-name "Powder Coated"})
 
   @?features)
 
-;; Calling `seq` or otherwise iterating over a "plural" field returns a list of its child fields,
-;; whose bindings can be read from the field using their names (quoted symbols). When providing
-;; `:init` for a plural field, each child should be a map of bindings as shown below.
+;; Calling `seq` on a plural field returns a list of its children, each of which is a form.
+;; Typically we would destructure each child using `:syms` to bring its fields into scope.
 
-
-(with-form [!form (?features :many {:name (str/upper-case ?name)})
-            :init {?features [{'?name "Herman"}
-                              {'?name "Sally"}]}]
-  ;; below, we destructure each ?feature using :syms to access its bindings
+(with-form [form (?features :many {:name (str/upper-case ?name)}
+                            :init [{'?name "Herman"}
+                                   {'?name "Sally"}])]
   (for [{:as ?feature :syms [?name]} ?features]
     @?name))
 
-;; Children are removed by passing a child instance to `forms/remove-many!`.
+;; Remove a child by passing it to `forms/remove-many!`.
 
-(with-form [!form (?items :many {:position ?position})]
-  ;; add two items
-  (forms/add-many! ?items '{?position 1} '{?position 2})
-  ;; remove the first item
-  (forms/remove-many! (first ?items))
-  ;; Only the second item remains:
-  @!form)
+(with-form [form (?features :many {:name (str/upper-case ?name)}
+                            :init [{'?name "Herman"}
+                                   {'?name "Sally"}])]
+  (forms/remove-many! (first ?features))
+  @form)
 
-;; Example using a :many field:
+;; Interactive example:
 
 (cljs
- (with-form [!form [[:db/add 1 :person/pets
-                     ;; define a plural field by adding a :many key to the field.
-                     ;; it should contain a "template" for each item in the list.
-                     (?pets :many {:pet/id ?id
-                                   :pet/name (?name :init "Fido")})]]]
+ (with-form [form [[:db/add 1 :person/pets
+                    ;; define a plural field by adding a :many key to the field.
+                    ;; it should contain a "template" for each item in the list.
+                    (?pets :many {:pet/id ?id
+                                  :pet/name (?name :init "Fido")})]]]
 
    [:div
-    [ui/show-code (str @!form)]
+    [ui/show-code (str @form)]
 
     (doall
      ;; call (seq ?pets) to get a list of fields, which can be destructured using :syms
@@ -366,10 +366,10 @@
 
 ;; To specify metadata targeting the children of a plural field, use the :child-meta key:
 
-(with-form [!form {:animal-names (?names :many ?name
-                                         :child-meta {:validators [(fn [value _]
-                                                                     {:type :hint
-                                                                      :content value})]})}]
+(with-form [form {:animal-names (?names :many ?name
+                                        :child-meta {:validators [(fn [value _]
+                                                                    {:type :hint
+                                                                     :content value})]})}]
   (forms/add-many! ?names '{?name "Toad"}
                    '{?name "Frog"})
   (->> (forms/messages ?names :deep true)
@@ -379,12 +379,12 @@
 
 ;; `watch-promise` communicates the status of a promise through a field's metadata as follows:
 ;; 1. `:loading?` is immediately set to `true` and `:remote-messages` are cleared,
-;; 2. When the promise resolves, `:loading?` is removed and `:remote-messages` are set to (:message return-value)
+;; 2. When the promise resolves, `:loading?` is removed and `:remote-messages` are set to `(:message return-value)`.
 
 ;; The `try-submit!` macro builds on this to manage submission of a form to a remote endpoint:
 ;; 1. We check if the form can be submitted using `submittable?`,
-;; 2. If no, we 'touch' the form so that validation/error messages will appear,
-;; 3. If yes, we evaluate the promise and call `watch-promise`.
+;; 2. If not, we `touch!` the form so that validation/error messages will appear,
+;; 3. If yes, we evaluate the promise and wrap it with `watch-promise`.
 
 ;; The following example includes buttons that show how to handle a successful or failed response.
 
@@ -422,22 +422,22 @@
 ;; `forms/clear!` resets a form to its initial state
 
 (cljs
- (with-form [!form {:a ?a
-                    :b (?b :init "B")
-                    :c ?c
-                    :d (?d :many
-                           [?e (?f :init "F") ?nil]
-                           :init [{'?e "E"}])}
+ (with-form [form {:a ?a
+                   :b (?b :init "B")
+                   :c ?c
+                   :d (?d :many
+                          [?e (?f :init "F") ?nil]
+                          :init [{'?e "E"}])}
              :meta {:a {:init "A"}
                     ?c {:init "C"}
                     ?e {:init "E"}}]
-   (str (= @!form
+   (str (= @form
            (do (reset! ?a 1)
                (reset! ?b 2)
                (reset! ?c 3)
                (forms/add-many! ?d '{?e 4 ?f 5 ?nil 6})
-               (forms/clear! !form)
-               @!form)))))
+               (forms/clear! form)
+               @form)))))
 
 ;; ## Reagent
 
@@ -465,24 +465,6 @@
 
 ('?a add)
 
-;; ## Requirements and Constraints
-;;
-;; Or, what I was thinking about while writing this library.
-;;
-;; - A typical form is made up of multiple fields, which will be (somehow) combined for submission to some
-;;   endpoint (could be REST, graphql, Om Next, Pathom...). There's no single "shape" of data that works for
-;;   all use-cases. Originally I wanted to make a forms library that would work well for submitting triples
-;;   to a DataScript/Datomic-like system, but didn't like how it felt when the system made assumptions about shape.
-;; - A "field" is more than a value - it is information about the value & how it should be
-;;   represented to a person ("metadata") which tends to be re-used in many places.
-;; - Validation can happen on fields or forms. The messages returned by a validator function can depend on
-;;   a field's value, and may be returned asynchronously. A server/endpoint can also return validation/error
-;;   messages. We can re-use the machinery we build for validation for other purposes, like value-dependent
-;;   hints/instructions.
-;; - It's necessary to track "touched" and "focused" states in order to show/hide messages appropriately.
-;; - Most of the time we can infer what "attribute" a field would correspond to by its location in a parent
-;;   structure (eg. if the field is in the value position of a map, or in a `:db/add` vector)
-;;
 ;;
 ;; # 🙏 NextJournal
 ;;

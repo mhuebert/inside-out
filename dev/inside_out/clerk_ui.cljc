@@ -13,7 +13,10 @@
 
 ;; our API is a `hiccup` macro which will compile the contents as ClojureScript
 ;; and render it using Reagent.
-(defmacro cljs [& exprs]
+(defmacro cljs
+  "Evaluate expressions in ClojureScript instead of Clojure. If the result is
+   a vector, it is passed to Reagent and interpreted as hiccup."
+  [& exprs]
   (let [name (symbol (str "reagent-view-" (hash exprs)))]
     (if (:ns &env)
       ;; in ClojureScript, define a function
@@ -24,17 +27,17 @@
 (def reagent-viewer
   (viewer/process-render-fn
    {:pred #(and (map? %) (contains? % :reagent/var))
-    :transform-fn (fn [{:nextjournal/keys [width] var :reagent/var}]
-                    (-> {:reagent/var var}
-                        viewer/wrap-value
-                        (assoc :nextjournal/width (or width :wide))))
     :fetch-fn (fn [_ x] x)
     :render-fn '(fn render-var [{var :reagent/var}]
                   (let [path (->> (str/split (str var) #"[./]")
                                   (mapv munge))
-                        reagent-fn (applied-science.js-interop/get-in js/window path)]
+                        reagent-fn (applied-science.js-interop/get-in js/window path)
+                        wrapper (fn [f] (let [result (f)]
+                                          (if (vector? result)
+                                            result
+                                            (v/inspect result))))]
                     (when reagent-fn
-                      (v/html [:div.m-1 [reagent-fn]]))))}))
+                      (v/html [:div.my-1 [wrapper reagent-fn]]))))}))
 
 
 (defn setup-viewers! []

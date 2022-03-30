@@ -35,7 +35,10 @@
     IDeref
     (-deref [o]
       (cond compute (compute (update-vals @!children deref))
-            (:many metadata) (mapv (comp deref @!children) @!state)
+            (:many metadata) (let [state @!state]
+                               (into (empty state)
+                                     (map (comp deref @!children))
+                                     state))
             :else @!state))
 
     IReset
@@ -105,25 +108,22 @@
 (defn remove-binding! [child]
   (swap! (!children (parent child)) dissoc (:sym child)))
 
-(defn- blank-many-child [field & [bindings]]
-  (assert (:many field) (str (:sym field) " is not :many"))
+(defn- make-many-child [field bindings]
   (let [{:many/keys [compute fields]} (:many field)
-        list-child (make-field field compute (merge {:sym (gensym 'list-child-)}
+        child (make-field field compute (merge {:sym (gensym 'list-child-)}
                                                     (:child-meta field)))]
-    (doseq [[sym meta] fields]
-      (make-binding! list-child (macros/if-found [init (get bindings sym)]
-                                  (assoc meta :init init)
-                                  meta)))
-    list-child))
+    (doseq [[sym meta] fields
+            :let [init (get bindings sym)]]
+      (make-binding! child (cond-> meta (some? init) (assoc :init init))))
+    child))
 
-(defn add-many! [parent & children]
-  (mapv (fn [child-or-bindings]
-          (let [list-child (if (map? child-or-bindings)
-                             (blank-many-child parent child-or-bindings)
-                             child-or-bindings)]
-            (add-to-parent! list-child parent)
-            (swap! (!state parent) conj (:sym list-child))
-            list-child)) children))
+(defn add-many! [plural-field & children]
+  (->> children
+       (mapv (fn [bindings]
+               (let [child (make-many-child plural-field bindings)]
+                 (swap! (!children plural-field) assoc (:sym child) child)
+                 (swap! (!state plural-field) conj (:sym child))
+                 child)))))
 
 (defn remove-many! [& children]
   (doseq [{:as ?child :keys [sym]} children]
@@ -134,7 +134,7 @@
 (defn init-many! [field]
   (when (:many field)
     (let [child-bindings (:init field)]
-      (reset! (!state field) [])
+      (reset! (!state field) (if child-bindings (empty child-bindings) []))
       (reset! (!children field) {})
       (apply add-many! field child-bindings)))
   field)
