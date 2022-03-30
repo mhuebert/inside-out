@@ -2,7 +2,7 @@
 ;;
 ;; _alpha - [feedback welcome](https://github.com/mhuebert/inside-out/discussions)_
 ;;
-;; A tool for writing forms. Syntax is minimal, to focus on essential concerns: what is our target
+;; A tool for writing web forms. Syntax is minimal, to focus on essential concerns: what is our target
 ;; data structure? From what fields is it composed? How should these fields behave?
 ;;
 ;;
