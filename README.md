@@ -6,6 +6,9 @@ See [Inside-Out: Documentation](https://github.com/mhuebert/inside-out/blob/main
 mhuebert/inside-out {:git/sha "..."}
 ```
 
+A tool for writing forms. Syntax is minimal, and lets us focus on essential concerns: what is our target
+data structure? From what fields is it composed? How should these fields behave?
+
 ### Features
 
 1. Concise syntax for defining a form and its fields in one step. Each field stores a value, and behaves
@@ -15,9 +18,6 @@ mhuebert/inside-out {:git/sha "..."}
 2. A metadata system that encourages data-driven design & code re-use, while handling common concerns like
    validation, hints, and error messages to support a high quality UX. ;; Forms should be "driven by data"
    but avoid impenetrable indirection - don't break "jump to source".
-
-Working with forms should be both simple and easy. Syntax should be minimal, and let us focus on the essential
-concerns: what is our target data structure? From what fields is it composed? How should these fields behave?
 
 ### Minimal example: 
 

@@ -1,8 +1,10 @@
-;; # Inside-Out
+;; # Inside-Out: a Clojure forms library
 ;;
-;; a Clojure forms library _(alpha - [feedback welcome](https://github.com/mhuebert/inside-out/discussions))_
+;; _alpha - [feedback welcome](https://github.com/mhuebert/inside-out/discussions)_
 ;;
-;; `{mhuebert/inside-out {:git/sha "..."}}`
+;; A tool for writing forms. Syntax is minimal, and lets us focus on essential concerns: what is our target
+;; data structure? From what fields is it composed? How should these fields behave?
+;;
 ;;
 ;; ## Features
 ;;
@@ -14,13 +16,12 @@
 ;;    validation, hints, and error messages to support a high quality UX. ;; Forms should be "driven by data"
 ;;    but avoid impenetrable indirection - don't break "jump to source".
 ;;
-;; Working with forms should be both simple and easy. Syntax should be minimal, and let us focus on the essential
-;; concerns: what is our target data structure? From what fields is it composed? How should these fields behave?
-;;
 ;; ## Namespace Setup
 ;;
 ;; You can mostly ignore this step. Only take note of
 ;; `[inside-out.forms :as forms]` and `[inside-out.reagent :refer [with-form]]`.
+
+;; **deps:** `{mhuebert/inside-out {:git/sha "..."}}`
 
 ^:nextjournal.clerk/toc?
 (ns ^:nextjournal.clerk/no-cache inside-out.notebook
