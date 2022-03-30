@@ -267,7 +267,7 @@
 (defn valid?
   "Returns true if field & descendants are valid"
   [field & {:keys [deep] :or {deep true}}]
-  (not (:invalid (types (messages field :deep deep)))))
+  (not (some #{:in-progress :invalid} (types (messages field :deep deep)))))
 
 (def invalid? (complement valid?))
 
