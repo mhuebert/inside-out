@@ -9,14 +9,11 @@
 ;;    and can take any shape.
 ;;
 ;; 2. A metadata system that encourages data-driven design & code re-use, while handling common concerns like
-;;    validation, hints, and error messages to support a high quality UX.
+;;    validation, hints, and error messages to support a high quality UX. ;; Forms should be "driven by data"
+;;    but avoid impenetrable indirection - don't break "jump to source".
 ;;
 ;; Working with forms should be both simple and easy. Syntax should be minimal, and let us focus on the essential
 ;; concerns: what is our target data structure? From what fields is it composed? How should these fields behave?
-;;
-;; Forms should be "driven by data" but avoid impenetrable indirection - don't break "jump to source". Don't write
-;; a library of input components - rather, expose an interface that makes writing compatible input components
-;; straightforward.
 ;;
 ;; ## Namespace Setup
 ;;
