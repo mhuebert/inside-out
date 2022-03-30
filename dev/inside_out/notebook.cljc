@@ -21,7 +21,7 @@
 ;; You can mostly ignore this step. Only take note of
 ;; `[inside-out.forms :as forms]` and `[inside-out.reagent :refer [with-form]]`.
 
-;; **deps:** `{io.github.mhuebert/inside-out {:git/sha "..."}}`
+;; **deps:** `{io.github.mhuebert/inside-out {:git/sha "$GIT_SHA"}}`
 
 ^#:nextjournal.clerk{:toc :pin :no-cache true}
 (ns inside-out.notebook

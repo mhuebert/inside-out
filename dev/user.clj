@@ -2,10 +2,8 @@
   (:require [nextjournal.clerk :as clerk]
             [nextjournal.clerk.config :as config]
             [inside-out.clerk-ui :as io-clerk]
-            nextjournal.clerk.view
+            nextjournal.clerk.viewer
             [clojure.string :as str]))
-
-(def show! clerk/show!)
 
 (defn start []
   (io-clerk/setup-viewers!)
