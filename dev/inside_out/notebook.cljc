@@ -1,6 +1,10 @@
 ;; # Inside-Out
 ;;
 ;; a Clojure forms library _(alpha - [feedback welcome](https://github.com/mhuebert/inside-out/discussions))_
+
+^{:nextjournal.clerk/visibility :hide}
+'{mhuebert/inside-out {:git/sha "..."}}
+
 ;;
 ;; ## Features
 ;;
