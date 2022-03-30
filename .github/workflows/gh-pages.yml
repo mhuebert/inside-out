@@ -13,6 +13,7 @@ jobs:
             path: |
               .cpcache
               .shadow-cljs
+              ~/.m2
             key: 1
 
       - uses: actions/checkout@v3
