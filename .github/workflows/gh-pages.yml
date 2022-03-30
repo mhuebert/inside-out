@@ -14,7 +14,7 @@ jobs:
               .cpcache
               .shadow-cljs
               ~/.m2
-            key: 1
+            key: "1"
 
       - uses: actions/checkout@v3
       - name: Install clojure tools

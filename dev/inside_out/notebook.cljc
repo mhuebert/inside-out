@@ -5,7 +5,6 @@
 ;; A tool for writing web forms. Syntax is minimal, to focus on essential concerns: what is our target
 ;; data structure? From what fields is it composed? How should these fields behave?
 ;;
-;;
 ;; ## Features
 ;;
 ;; 1. Concise syntax for defining a form and its fields in one step. Each field stores a value, and behaves
