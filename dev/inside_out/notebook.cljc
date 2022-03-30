@@ -22,7 +22,7 @@
 
 ;; **deps:** `{io.github.mhuebert/inside-out {:git/sha "$GIT_SHA"}}`
 
-^#:nextjournal.clerk{:toc :pin :no-cache true}
+^#:nextjournal.clerk{:toc true :no-cache true}
 (ns inside-out.notebook
   (:require [inside-out.forms :as forms]
             [inside-out.reagent :refer [with-form]]
