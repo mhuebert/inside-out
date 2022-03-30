@@ -73,14 +73,13 @@
   (reset! ?pet-name "Fido")
   @form)
 
-;; Initial field values can be supplied via `:init` metadata on a field. We can add
-;; "inline" metadata by wrapping the field in a list, with key-value pairs:
+;; Initial values can be supplied via `:init` metadata. Add metadata by wrapping
+;; the field in a list, with key-value pairs.
 
 (with-form [contact-info {:name (?name :init "Peter")}]
   @contact-info)
 
-;; Or, add metadata keys as options after the form. Each key should contain a map of fields
-;; to values.
+;; Or, add metadata as options after the form.
 
 (with-form [foo (str ?first-name " " ?last-name)
             :init {?first-name "Peter"
@@ -109,9 +108,8 @@
     (str " " @?number " ")
     (str/join @cars)]))
 
-;; This is quite different from giving each field a "path" or "cursor" into an atom,
-;; another common approach to making forms, which requires that the "structure" of the form
-;; is static.
+;; This is quite different from the common approach of giving each field a "path" or "cursor"
+;; into an atom, which requires the shape of the form to be static.
 
 ;; ## Metadata
 
@@ -121,17 +119,17 @@
 
 ;; 1. Inline, by wrapping the field in a list: `(?name :init "Peter")`
 ;; 2. Adding metadata keys after the form.
-;;    The value can be a map of `{?field <value>}` or a vector of `[?field1, ?field2]` which sets
-;;    each value to `true`.
+;;    The value can be a map of `{?field <value>}`,
+;;    or a vector of `[?field1, ?field2]` (which sets each value to `true`).
 ;; 3. Adding a `:meta` option, of the shape `{?field {:meta-key <meta-value}}`
 ;;
 ;; Examples:
 
 (with-form [form {:name ?name
                   :email ?email}
-            :init {?name "Peter"
-                   ?email "Rabbit"}
-            :required [?email]] ;; equivalent to {?email true}
+            :init {?name "Peter"}
+            :required [?email ?name] ;; equivalent to :required {?email true ?name true}
+            :meta {?email {:init "Rabbit"}}]
   (:required ?email))
 
 ;; We can read metadata by looking up a key on a field, as seen above in `(:required ?email)`.
@@ -302,8 +300,8 @@
 ;; ## Plural fields (subforms)
 
 ;; A field may contain multiple "child" elements. Define a plural field by passing a
-;; `:many` option with the template for each child. To supply initial values, pass in
-;; a collection of bindings as `:init`.
+;; `:many` option with the template for each child. If present, `:init` should be
+;; a collection of bindings - maps of the shape `{?field-name <value>}`.
 
 (with-form [form (?features :many {:name ?feature-name}
                             :init [{'?feature-name "My Great Feature"}])]

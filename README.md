@@ -34,3 +34,9 @@ data structure? From what fields is it composed? How should these fields behave?
      :on-change (fn [e] (reset! ?name (.. e -target -value)))
      :placeholder "Name:"}]])
 ```
+
+## Dev
+
+1. with [babashka](https://github.com/babashka/babashka) installed, run `bb dev`. 
+2. open a REPl connection to the shadow process (port is in `.shadow-cljs/nrepl.port`)
+3. eval `(start)` in `dev/user.clj` to build the notebook  in `dev/notebook.clj` and live-reload changes.

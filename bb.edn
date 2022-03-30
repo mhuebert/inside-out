@@ -1,4 +1,5 @@
-{:tasks {dev (shell "shadow-cljs -A:dev:clerk watch clerk")
+{:tasks {dev (do (shell "yarn")
+                 (shell "shadow-cljs -A:dev:clerk watch clerk"))
          publish (do (shell "yarn")
                      (shell "yarn shadow-cljs -A:dev:clerk release clerk")
                      (shell "clojure -X:dev:clerk user/publish!")

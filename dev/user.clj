@@ -11,7 +11,8 @@
   (swap! config/!resource->url merge {"/js/viewer.js" "http://localhost:8765/js/main.js"})
   (clerk/serve! {:browse? true
                  :watch-paths ["dev"]
-                 :show-filter-fn #(str/includes? % "notebooks")}))
+                 :show-filter-fn #(str/includes? % "notebooks")})
+  (clerk/show! "dev/inside_out/notebook.cljc"))
 
 (defn publish! [_]
   (io-clerk/setup-viewers!)
@@ -26,5 +27,6 @@
  (start)
 
  (clerk/serve! {:browse? true})
+
 
  (publish!))
