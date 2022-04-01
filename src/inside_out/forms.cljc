@@ -3,9 +3,10 @@
   (:refer-clojure :exclude [assoc-in atom descendants update-vals])
   (:require #?@(:cljs [[reagent.core :as reagent]
                        [reagent.ratom :as ratom]])
+            [clojure.core :as core]
             [applied-science.js-interop :as j]
             [clojure.string :as str]
-            [inside-out.macros :as macros]
+            [inside-out.macros :as macros :refer [swap->]]
             [inside-out.util :as util :refer [assoc-in update-vals]])
   #?(:cljs (:require-macros [inside-out.forms])))
 
@@ -74,6 +75,66 @@
 
 (def atom* #?(:cljs reagent/atom :clj clojure.core/atom))
 
+(defn message
+  ([type] {:type type})
+  ([type content] {:type type :content content})
+  ([type content & {:as options}] (merge options (message type content))))
+
+(defn debounce [ms f]
+  #?(:clj f
+     :cljs
+     (if (nil? ms)
+       f
+       (let [last-time (volatile! (- (js/Date.now) ms 1))
+             last-result (atom* nil)
+             scheduled-args (volatile! nil)
+             eval! (fn [args]
+                     (vreset! scheduled-args nil)
+                     (vreset! last-time (js/Date.now))
+                     (reset! last-result (apply f args)))]
+         (fn debounced [& args]
+           (let [diff (- (js/Date.now) @last-time)]
+             (cond @scheduled-args (vreset! scheduled-args args)
+                   (< diff ms) (do (vreset! scheduled-args args)
+                                   (js/setTimeout #(eval! @scheduled-args) (- ms diff)))
+                   :else (eval! args)))
+           @last-result)))))
+
+(defn async-validator [f & {:as options}]
+  (with-meta f {::async options}))
+
+(defn- init-async-validator! [f]
+  #?(:clj
+     f
+     :cljs
+     (let [state (atom* nil)
+           in-progress (message :in-progress "Loading...")
+           {:keys [debounce-ms]} (::async (meta f))
+           request! (debounce debounce-ms
+                      (fn [value context error]
+                        (let [this-req (inc (:req @state 0))]
+                          (swap! state assoc :loading? true :req this-req)
+                          (-> (js/Promise.resolve (f value context state))
+                              (j/call :then
+                                (fn [result]
+                                  (swap-> state
+                                          (assoc-in [:cache value] result)
+                                          (cond-> (= this-req (:req @state))
+                                                  (dissoc :loading? :error)))))
+                              (j/call :catch
+                                (fn [err]
+                                  (when (= this-req (:req @state))
+                                    (swap-> state
+                                            (dissoc :loading?)
+                                            (assoc :error (message :error (str "Validation error: " err))))))))
+                          (keep identity [error in-progress]))))]
+       (fn async-validate [value context]
+         #?(:cljs
+            (let [{:keys [loading? cache error] :as st} @state]
+              (or (when loading? in-progress)
+                  (get cache value)
+                  (request! value context error))))))))
+
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]
   {:pre [sym]}
@@ -86,11 +147,12 @@
                             (into {}
                                   (map #(cond->> (% sym)
                                                  attribute (concat (% attribute))))))
-        meta (merge inherited-meta meta)
+        meta (-> (merge inherited-meta meta)
+                 (update :validators (partial mapv #(cond-> % (::async (core/meta %)) (init-async-validator!)))))
         field (->Field parent
                        compute
                        (atom* (:init meta))
-                       (merge inherited-meta meta)
+                       meta
                        (atom* {})
                        (clojure.core/atom {}))]
     field))
@@ -111,7 +173,7 @@
 (defn- make-many-child [field bindings]
   (let [{:many/keys [compute fields]} (:many field)
         child (make-field field compute (merge {:sym (gensym 'list-child-)}
-                                                    (:child-meta field)))]
+                                               (:child-meta field)))]
     (doseq [[sym meta] fields
             :let [init (get bindings sym)]]
       (make-binding! child (cond-> meta (some? init) (assoc :init init))))
@@ -204,8 +266,8 @@
                   (mapcat #(wrap-message (% value context)))
                   (keep identity)
                   (map (fn [x]
-                         (assert (and (map? x) (:type x) (:content x))
-                                 (str "Validator message must be a map containing :type and :context. Checking "
+                         (assert (and (map? x) (:type x))
+                                 (str "Validator message must be a map containing :type. Checking "
                                       (:path context) ", found " x))
                          x))
                   (let [sym (:sym context)]
@@ -293,14 +355,14 @@
      [form promise]
      (let [meta-atom (!meta form)
            complete! (fn [{:as result :keys [message]}]
-                       (macros/swap-> meta-atom
-                                      (dissoc :loading?)
-                                      (assoc :remote-messages
-                                        (wrap-message message)))
+                       (swap-> meta-atom
+                               (dissoc :loading?)
+                               (assoc :remote-messages
+                                      (wrap-message message)))
                        result)]
-       (macros/swap-> meta-atom
-                      (assoc :loading? true)
-                      (dissoc :remote-messages))
+       (swap-> meta-atom
+               (assoc :loading? true)
+               (dissoc :remote-messages))
        (-> promise
            (j/call :then complete!)
            (j/call :catch (fn [e] (complete! {:error (ex-message e)})))))))
@@ -334,9 +396,9 @@
 (defn blur-handler
   [?field]
   (util/memo-on ?field ::on-blur
-                (fn [e] (macros/swap-> (!meta ?field)
-                                       (dissoc :focused?)
-                                       (assoc :touched? true)))))
+                (fn [e] (swap-> (!meta ?field)
+                                (dissoc :focused?)
+                                (assoc :touched? true)))))
 
 (comment
  ;; change-handler can be generated from cursor

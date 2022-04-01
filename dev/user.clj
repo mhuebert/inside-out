@@ -11,7 +11,7 @@
   (clerk/serve! {:browse? true
                  :watch-paths ["dev"]
                  :show-filter-fn #(str/includes? % "notebooks")})
-  (Thread/sleep 200)
+  (Thread/sleep 500)
   (clerk/show! "dev/inside_out/notebook.cljc"))
 
 (defn publish! [_]

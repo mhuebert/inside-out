@@ -15,28 +15,37 @@
 ;;    validation, hints, and error messages to support a high quality UX. Forms should be "driven by data"
 ;;    but avoid impenetrable indirection - don't break "jump to source".
 ;;
-;; ## Namespace Setup
+;; ## Usage
 ;;
-;; You can mostly ignore this step. Only take note of
-;; `[inside-out.forms :as forms]` and `[inside-out.reagent :refer [with-form]]`.
+;; ```clj
+;; ;; deps
+;; {io.github.mhuebert/inside-out {:git/sha "$GIT_SHA"}}
+;;
+;; ;; namespace
+;; (ns my-app
+;;   (:require [inside-out.forms.reagent :refer [with-form]]
+;;             [inside-out.forms :as forms]))
+;;```
 
-;; **deps:** `{io.github.mhuebert/inside-out {:git/sha "$GIT_SHA"}}`
-
-^#:nextjournal.clerk{:toc true :no-cache true}
+^#:nextjournal.clerk{:toc true :no-cache true :visibility :hide-ns}
 (ns inside-out.notebook
   (:require [inside-out.forms :as forms]
             [inside-out.reagent :refer [with-form]]
 
    ;; only for notebook purposes
+            [nextjournal.clerk :as-alias clerk]
+
             [clojure.string :as str]
             [inside-out.clerk-ui :as ui :refer [cljs]]
             [kitchen-async.promise :as p]))
 
+;; &nbsp;
+
 ;; ## Quick Example
 
 (with-form [contact-info {:name ?name}]
-  (reset! ?name "Peter Rabbit")
-  @contact-info)
+           (reset! ?name "Peter Rabbit")
+           @contact-info)
 
 ;; What do we see here?
 ;;
@@ -50,12 +59,12 @@
 
 (cljs
  (with-form [contact-info {:person/name ?name}]
-   [:div
-    [:input.border.p-3
-     {:value @?name
-      :on-change (fn [event] (reset! ?name (.. event -target -value)))
-      :placeholder "Your name:"}]
-    [:pre (str @contact-info)]]))
+            [:div
+             [:input.border.p-3
+              {:value @?name
+               :on-change (fn [event] (reset! ?name (.. event -target -value)))
+               :placeholder "Your name:"}]
+             [:pre (str @contact-info)]]))
 
 ;; Type into the input and see how the form's value updates.
 
@@ -68,22 +77,22 @@
 
 (with-form [form [[:db/add 1 :person/pet ?pet-id]
                   [:db/add ?pet-id :pet/name ?pet-name]]]
-  (reset! ?pet-id 2)
-  (reset! ?pet-name "Fido")
-  @form)
+           (reset! ?pet-id 2)
+           (reset! ?pet-name "Fido")
+           @form)
 
 ;; Initial values can be supplied via `:init` metadata. Add metadata by wrapping
 ;; the field in a list, with key-value pairs.
 
 (with-form [contact-info {:name (?name :init "Peter")}]
-  @contact-info)
+           @contact-info)
 
 ;; Or, add metadata as options after the form.
 
 (with-form [foo (str ?first-name " " ?last-name)
             :init {?first-name "Peter"
                    ?last-name "Rabbit"}]
-  @foo)
+           @foo)
 
 ;; Separating the form from field metadata can help keep the form's structure clean and readable.
 
@@ -93,19 +102,19 @@
 
 (with-form [cars (take ?number (repeat "🚙"))
             :init {?number 3}]
-  @cars)
+           @cars)
 
 ;; Interactive example:
 
 (cljs
  (with-form [cars (take ?number (repeat "🚙"))
              :init {?number 3}]
-   [:div
-    [:input {:type "range" :min "1" :max "10"
-             :value @?number
-             :on-change (fn [e] (->> e .-target .-value js/parseInt (reset! ?number)))}]
-    (str " " @?number " ")
-    (str/join @cars)]))
+            [:div
+             [:input {:type "range" :min "1" :max "10"
+                      :value @?number
+                      :on-change (fn [e] (->> e .-target .-value js/parseInt (reset! ?number)))}]
+             (str " " @?number " ")
+             (str/join @cars)]))
 
 ;; This is quite different from the common approach of giving each field a "path" or "cursor"
 ;; into an atom, which requires the shape of the form to be static.
@@ -129,7 +138,7 @@
             :init {?name "Peter"}
             :required [?email ?name] ;; equivalent to :required {?email true ?name true}
             :meta {?email {:init "Rabbit"}}]
-  (:required ?email))
+           (:required ?email))
 
 ;; We can read metadata by looking up a key on a field, as seen above in `(:required ?email)`.
 
@@ -144,12 +153,12 @@
 ;;    `[:db/add <id> <attribute> ?field]`
 
 (with-form [form {:pet/id ?pet-id}]
-  ;; attribute is inferred from key in a map
-  (:attribute ?pet-id))
+           ;; attribute is inferred from key in a map
+           (:attribute ?pet-id))
 
 (with-form [form [[:db/add 1 :person/name ?name]]]
-  ;; attribute is inferred based on position in a :db/add vector
-  (:attribute ?name))
+           ;; attribute is inferred based on position in a :db/add vector
+           (:attribute ?name))
 
 ;; Defining a map of attribute-metadata:
 
@@ -162,7 +171,7 @@
 
 (with-form [form [[:db/add 1 :person/name ?name]]
             :meta app-attributes]
-  (:label ?name))
+           (:label ?name))
 
 ;; In practice, you'll probably want to define attribute metadata once in your app and re-use it
 ;; everywhere. To support this use-case, fields inherit from a globally defined var
@@ -180,7 +189,7 @@
 
 (cljs
  (with-form [form [[:db/add 1 :person/name ?name]]]
-   (:field/label ?name)))
+            (:field/label ?name)))
 
 ;; ## Validation
 
@@ -190,8 +199,8 @@
 (with-form [form [[:db/add 1 :person/name ?name]]
             :meta {?name {:validators [(forms/min-length 3)]}}]
 
-  (reset! ?name "ma")
-  (forms/messages ?name))
+           (reset! ?name "ma")
+           (forms/messages ?name))
 
 ;; Each validator is a function which is passed the field's current value and a map of
 ;; the other fields in the form (which must be dereferenced to read their values):
@@ -206,9 +215,9 @@
                   {:db/id 2
                    :child/parent 1
                    :child/age (?child-age :validators [validate-child-age])}]]
-  (reset! ?parent-age 10)
-  (reset! ?child-age 20)
-  (forms/messages ?child-age))
+           (reset! ?parent-age 10)
+           (reset! ?child-age 20)
+           (forms/messages ?child-age))
 
 
 ;; Validators for the form itself can be passed using a :form/validators option
@@ -220,23 +229,23 @@
                                 (when-not (or @?mobile @?landline)
                                   {:type :invalid
                                    :content "At least one phone number must be supplied"}))]]
-  ;; form becomes valid after adding a value for ?mobile
-  [(forms/valid? form)
-   (do (reset! ?mobile "+49 555 5555555")
-       (forms/valid? form))])
+           ;; form becomes valid after adding a value for ?mobile
+           [(forms/valid? form)
+            (do (reset! ?mobile "+49 555 5555555")
+                (forms/valid? form))])
 
 ;; A `:required` option may be passed with a list of required fields
 
 (with-form [form {:name ?name :email ?email :phone ?phone}
             :required [?name ?email ?phone]]
-  (forms/messages form :deep true))
+           (forms/messages form :deep true))
 
 ;; Or, include `:required true` in a field's metadata
 
 (with-form [form {:name (?name :required true)
                   :email ?email}
             :meta {?email {:required true}}]
-  (forms/messages form :deep true))
+           (forms/messages form :deep true))
 
 ;; ### Validator functions
 
@@ -257,6 +266,32 @@
   :when #{:always :focused :touched}} ;; default is :focused
  {:type :invalid
   :content "A value that should be rejected"}]
+
+;; ### Async validators
+;;
+;; A validator can return a promise if it is wrapped in `forms/async-validator`,
+;; passing an optional `:debounce-ms` parameter. The validator will be memoized,
+;; to run only once per value.
+
+#?(:cljs
+   (def check-domain
+     (-> (fn [value _]
+           (if (< (count value) 3)
+             (forms/message :invalid "too short" :visibility :always)
+             (p/do (p/timeout 500)
+                   (if (even? (count value))
+                     (forms/message :info "Even: valid" :visibility :always)
+                     (forms/message :invalid "Odd: invalid" :visibility :always)))))
+         (forms/async-validator :debounce-ms 1000))))
+
+(cljs
+ (with-form [form {:domain (?domain :validators [check-domain])}]
+   [:div
+    [ui/input-text ?domain]
+
+    [:pre (str (forms/messages ?domain))]
+    [:pre "submittable? " (str (forms/submittable? form))]]))
+
 
 ;; ## Components
 ;;
@@ -291,10 +326,11 @@
              :meta {?name {:label "Your full name"
                            :validators [(forms/min-length 3)]}}]
 
-   [:form
-    [managed-text-input ?name]
-    [:pre (str "valid? " (forms/valid? form))]
-    [:pre (str @form)]]))
+            [:form
+             [managed-text-input ?name]
+             [:pre (str "valid? " (forms/valid? form))]
+             [:pre (str @form)]]))
+
 
 ;; ## Plural fields (subforms)
 
@@ -304,16 +340,16 @@
 
 (with-form [form (?features :many {:name ?feature-name}
                             :init [{'?feature-name "My Great Feature"}])]
-  @?features)
+           @?features)
 
 ;; Add a child using `forms/add-many!`:
 
 (with-form [form (?features :many {:name ?feature-name})]
 
-  ;; add a child:
-  (forms/add-many! ?features {'?feature-name "Powder Coated"})
+           ;; add a child:
+           (forms/add-many! ?features {'?feature-name "Powder Coated"})
 
-  @?features)
+           @?features)
 
 ;; Calling `seq` on a plural field returns a list of its children, each of which is a form.
 ;; Typically we would destructure each child using `:syms` to bring its fields into scope.
@@ -321,16 +357,16 @@
 (with-form [form (?features :many {:name (str/upper-case ?name)}
                             :init [{'?name "Herman"}
                                    {'?name "Sally"}])]
-  (for [{:as ?feature :syms [?name]} ?features]
-    @?name))
+           (for [{:as ?feature :syms [?name]} ?features]
+             @?name))
 
 ;; Remove a child by passing it to `forms/remove-many!`.
 
 (with-form [form (?features :many {:name (str/upper-case ?name)}
                             :init [{'?name "Herman"}
                                    {'?name "Sally"}])]
-  (forms/remove-many! (first ?features))
-  @form)
+           (forms/remove-many! (first ?features))
+           @form)
 
 ;; Interactive example:
 
@@ -341,24 +377,24 @@
                     (?pets :many {:pet/id ?id
                                   :pet/name (?name :init "Fido")})]]]
 
-   [:div
-    [ui/show-code (str @form)]
+            [:div
+             [ui/show-code (str @form)]
 
-    (doall
-     ;; call (seq ?pets) to get a list of fields, which can be destructured using :syms
-     ;; to get the child bindings.
-     (for [{:as ?pet :syms [?id ?name]} ?pets]
-       [:div.flex.items-center.my-2
-        {:key @?id}
-        [managed-text-input ?name {:placeholder "Name"}]
-        [:div.text-red-500.hover:underline.hover:cursor-pointer.mx-3.font-bold
-         ;; call forms/remove-many! to remove an item
-         {:on-click #(forms/remove-many! ?pet)} "X"]]))
+             (doall
+              ;; call (seq ?pets) to get a list of fields, which can be destructured using :syms
+              ;; to get the child bindings.
+              (for [{:as ?pet :syms [?id ?name]} ?pets]
+                [:div.flex.items-center.my-2
+                 {:key @?id}
+                 [managed-text-input ?name {:placeholder "Name"}]
+                 [:div.text-red-500.hover:underline.hover:cursor-pointer.mx-3.font-bold
+                  ;; call forms/remove-many! to remove an item
+                  {:on-click #(forms/remove-many! ?pet)} "X"]]))
 
-    [:div.my-3.text-blue-500.hover:underline.hover:cursor-pointer
-     ;; to add an item, call form/add-many! with ?pets and a map of bindings,
-     ;; using quoted symbols for keys {'?field, value}
-     {:on-click #(forms/add-many! ?pets {'?id (rand-int 1000)})} "Add Pet"]]))
+             [:div.my-3.text-blue-500.hover:underline.hover:cursor-pointer
+              ;; to add an item, call form/add-many! with ?pets and a map of bindings,
+              ;; using quoted symbols for keys {'?field, value}
+              {:on-click #(forms/add-many! ?pets {'?id (rand-int 1000)})} "Add Pet"]]))
 
 ;; To specify metadata targeting the children of a plural field, use the :child-meta key:
 
@@ -366,10 +402,10 @@
                                         :child-meta {:validators [(fn [value _]
                                                                     {:type :hint
                                                                      :content value})]})}]
-  (forms/add-many! ?names '{?name "Toad"}
-                   '{?name "Frog"})
-  (->> (forms/messages ?names :deep true)
-       (map :content)))
+           (forms/add-many! ?names '{?name "Toad"}
+                            '{?name "Frog"})
+           (->> (forms/messages ?names :deep true)
+                (map :content)))
 
 ;; ## Server submission
 
@@ -391,29 +427,29 @@
                                  (when-not accepted-terms
                                    {:type :invalid
                                     :content "Must accept terms"}))]]
-   [:div
-    [ui/input-text ?name]
-    [:label.flex.flex-row.items-center [ui/input-checkbox ?accepted] "Accept terms?"]
-    [:pre.text-xs.whitespace-pre-wrap (str @form)]
-    (into [:div]
-          (map ui/view-message (if (:loading? form)
-                                 (forms/wrap-message "Loading...")
-                                 (forms/visible-messages form))))
-    [:button.bg-blue-500.text-white.p-3.m-3
-     {:on-click #(forms/try-submit! form
-                   (p/let [name @?name
-                           result (p/timeout 500)]
-                     {:message (str "Thanks, " name "!")}))}
-     "Submit-Success"]
-    [:button.bg-red-500.text-white.p-3.m-3
-     {:on-click
-      #(forms/try-submit! form
-         (p/let [name @?name
-                 result (p/timeout 500)]
-           {:message
-            {:type :error
-             :content (str "Sorry " name ", an error occurred.")}}))}
-     "Submit-Error"]]))
+            [:div
+             [ui/input-text ?name]
+             [:label.flex.flex-row.items-center [ui/input-checkbox ?accepted] "Accept terms?"]
+             [:pre.text-xs.whitespace-pre-wrap (str @form)]
+             (into [:div]
+                   (map ui/view-message (if (:loading? form)
+                                          (forms/wrap-message "Loading...")
+                                          (forms/visible-messages form))))
+             [:button.bg-blue-500.text-white.p-3.m-3
+              {:on-click #(forms/try-submit! form
+                            (p/let [name @?name
+                                    result (p/timeout 500)]
+                                   {:message (str "Thanks, " name "!")}))}
+              "Submit-Success"]
+             [:button.bg-red-500.text-white.p-3.m-3
+              {:on-click
+               #(forms/try-submit! form
+                  (p/let [name @?name
+                          result (p/timeout 500)]
+                         {:message
+                          {:type :error
+                           :content (str "Sorry " name ", an error occurred.")}}))}
+              "Submit-Error"]]))
 
 ;; `forms/clear!` resets a form to its initial state
 
@@ -427,13 +463,13 @@
              :meta {:a {:init "A"}
                     ?c {:init "C"}
                     ?e {:init "E"}}]
-   (str (= @form
-           (do (reset! ?a 1)
-               (reset! ?b 2)
-               (reset! ?c 3)
-               (forms/add-many! ?d '{?e 4 ?f 5 ?nil 6})
-               (forms/clear! form)
-               @form)))))
+            (str (= @form
+                    (do (reset! ?a 1)
+                        (reset! ?b 2)
+                        (reset! ?c 3)
+                        (forms/add-many! ?d '{?e 4 ?f 5 ?nil 6})
+                        (forms/clear! form)
+                        @form)))))
 
 ;; ## Reagent
 
@@ -449,7 +485,7 @@
 ;; In fact, we can call a form as a function, and pass in a map of bindings:
 
 (with-form [add (+ ?a ?b)]
-  (add '{?a 1 ?b 2}))
+           (add '{?a 1 ?b 2}))
 
 ;; This is probably most useful for REPL experiments or debugging. There is also a plain `form`
 ;; macro  which creates a form without bringing anything into scope.
