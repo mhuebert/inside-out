@@ -18,7 +18,7 @@
 (declare closest)
 
 (macros/support-clj-protocols
-  (deftype Field [parent compute !state metadata !meta !children computed-messages]
+  (deftype Field [parent compute !state metadata !meta !children]
     ISeqable
     (-seq [o]
       (if (:many metadata)
@@ -30,7 +30,7 @@
         (get @!children k)
         (macros/some-or (@!meta k)
                         (metadata k)
-                        (when (= k :touched?) (closest parent :touched?)))))
+                        (when (= k :touched) (closest parent :touched)))))
     (-lookup [o k nf] (macros/some-or (get o k) nf))
 
     IDeref
@@ -85,29 +85,32 @@
        f
        (let [last-time (volatile! (- (js/Date.now) ms 1))
              last-result (atom* nil)
-             scheduled-args (volatile! nil)
+             next-args (volatile! nil)
+             next-timeout (volatile! nil)
              eval! (fn [args]
-                     (vreset! scheduled-args nil)
+                     (vreset! next-args nil)
                      (vreset! last-time (js/Date.now))
-                     (reset! last-result (apply f args)))]
+                     (reset! last-result (apply f args)))
+             schedule! (fn [args]
+                         (do (vreset! next-args args)
+                             (some-> @next-timeout js/clearTimeout)
+                             (vreset! next-timeout (js/setTimeout #(eval! @next-args) ms))))]
          (fn debounced [& args]
            (let [diff (- (js/Date.now) @last-time)]
-             (cond @scheduled-args (vreset! scheduled-args args)
-                   (< diff ms) (do (vreset! scheduled-args args)
-                                   (js/setTimeout #(eval! @scheduled-args) (- ms diff)))
-                   :else (eval! args)))
+             (if (or @next-args (< diff ms))
+               (schedule! args)
+               (eval! args)))
            @last-result)))))
 
-(defn async-validator [f & {:as options}]
-  (with-meta f {::async options}))
+(defn validator [f & {:as options :keys [async debounce-ms when-touched]}]
+  (vary-meta f assoc ::validator options))
 
-(defn- init-async-validator! [f]
+(defn- wrap-async-validator! [f {:keys [debounce-ms]} field]
   #?(:clj
      f
      :cljs
      (let [state (atom* nil)
            in-progress (message :in-progress "Loading...")
-           {:keys [debounce-ms]} (::async (meta f))
            request! (debounce debounce-ms
                       (fn [value context error]
                         (let [this-req (inc (:req @state 0))]
@@ -133,7 +136,29 @@
                   (get cache value)
                   (request! value context error))))))))
 
-(declare compute-messages)
+(defn wrap-touched-validator [f options field]
+  (fn [value context]
+    (when (:touched field)
+      (f value context))))
+
+(defn get-any [ks m]
+  (reduce (fn [ret k] (if-some [v (k m)] (reduced v) ret)) nil ks))
+
+(defn wrap-compute-when [f {:keys [compute-when]} field]
+  (fn [value context]
+    (when (get-any compute-when field)
+          (f value context))))
+
+(defn init-validator [f field]
+  (if-let [options (some-> (meta f) ::validator)]
+    (let [{:keys [async compute-when]} options]
+      (cond-> f
+              async (wrap-async-validator! options field)
+              compute-when (wrap-compute-when options field)))
+    f))
+
+(declare compute-messages required field-context)
+
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]
   {:pre [sym]}
@@ -146,20 +171,21 @@
                             (into {}
                                   (map #(cond->> (% sym)
                                                  attribute (concat (% attribute))))))
-        meta (-> (merge inherited-meta meta)
-                 (update :validators (partial mapv #(cond-> % (::async (core/meta %)) (init-async-validator!)))))
-        validators (:validators meta)
+        meta (merge inherited-meta meta)
         field (->Field parent
                        compute
                        (atom* (:init meta))
                        meta
                        (atom* {})
-                       (clojure.core/atom {})
-                       nil)]
-    (set! (.-computed-messages field)
-          #?(:cljs (ratom/make-reaction (fn []
-                                          (compute-messages field)))
-             :clj  (reify clojure.lang.IDeref (deref [_] (compute-messages field)))))
+                       (clojure.core/atom {}))
+        validators (->> (:validators meta)
+                        (concat (when (:required meta) [required]))
+                        (replace {:required required})
+                        (mapv #(init-validator % field)))
+        messages-fn #(compute-messages @field validators (field-context field))]
+    (swap! (!meta field) assoc :!messages
+           #?(:cljs (ratom/make-reaction messages-fn)
+              :clj  (reify clojure.lang.IDeref (deref [_] (messages-fn)))))
     field))
 
 (declare make-binding!)
@@ -219,6 +245,11 @@
 
 ;; ## Validation
 
+(def required
+  (fn [value & _]
+    (when (nil? value)
+      {:type :invalid :content "Required"})))
+
 (defn max-length
   "Returns a validator which restricts `count` of input to max `i`"
   [i]
@@ -235,11 +266,6 @@
       {:type :invalid
        :content (str "Too short (min " i " chars)")})))
 
-(def required
-  (fn [value & _]
-    (when (nil? value)
-      {:type :invalid :content "Required"})))
-
 (defn debug-name [?field]
   (->> (iterate parent ?field)
        (take-while identity)
@@ -252,7 +278,7 @@
   [field]
   (assoc (closest field (comp not-empty deref !children))
     :sym (:sym field)
-    :path (debug-name field)))
+    #_#_:path (debug-name field)))
 
 (defn wrap-message [m]
   (cond (string? m) [{:content m}]
@@ -261,12 +287,9 @@
 
 (defn compute-messages
   ([field]
-   (compute-messages @field (cond->> (:validators field)
-                                     (:required field)
-                                     (concat [:required])) (field-context field)))
+   (compute-messages @field (:validators field) (field-context field)))
   ([value validators context]
    (->> validators
-        (replace {:required required})
         (into [] (comp
                   (mapcat #(wrap-message (% value context)))
                   (keep identity)
@@ -282,20 +305,20 @@
   (let [ch (vals @(!children ?field))]
     (concat ch (mapcat descendants ch))))
 
-(defn computed-messages [^Field field] @(.-computed-messages field))
+(defn computed-messages [^Field field] @(:!messages field))
 
 (defn messages
   "Returns validator messages for a field/form"
   [field & {:keys [deep]}]
   (concat (:remote-messages field)
           (if deep
-            (mapcat compute-messages (cons field (descendants field)))
+            (mapcat computed-messages (cons field (descendants field)))
             (computed-messages field))))
 
 (defn show-message?
   "Returns true if message should be shown, based on :visibility of message
    and :touched/:focused state of field."
-  [{:keys [focused? touched?]} message]
+  [{:keys [focused touched]} message]
   (let [visibility (or (:visibility message)
                        ;; visibility defaults
                        (case (:type message)
@@ -306,8 +329,8 @@
                          ;; any other type (or no type), always show
                          :always))]
     (or (= :always visibility)
-        (and touched? (= :touched visibility))
-        (and focused? (= :focused visibility)))))
+        (and touched (= :touched visibility))
+        (and focused (= :focused visibility)))))
 
 (def message-order
   ;; show errors above hint
@@ -345,7 +368,7 @@
 
 ;; how to handle remote submission of forms
 
-(defn touch! [form] (swap! (!meta form) assoc :touched? true))
+(defn touch! [form] (swap! (!meta form) assoc :touched true))
 
 (defn submittable?
   "Returns true if submission should be enabled (form is valid & not loading)"
@@ -373,29 +396,29 @@
                                (reagent/dispose! waiting?)
                                (resolve))))))))))))
 
-#?(:cljs
-   (defn watch-promise
-     "Wraps a promise to store :loading? and :remote-messages as reactive metadata on `form`.
+(defn watch-promise
+  "Wraps a promise to store :loading? and :remote-messages as reactive metadata on `form`.
 
-      If the promise resolves to a map containing :messages, these will be set as
-      the form's :remote-messages, which are included in `(messages form)`.
+   If the promise resolves to a map containing :messages, these will be set as
+   the form's :remote-messages, which are included in `(messages form)`.
 
-      Added sugar: if an :error key is present, it will be considered the only message
-      and wrapped as {:type :error, :content error}"
-     [form promise]
-     (let [meta-atom (!meta form)
-           complete! (fn [{:as result :keys [message]}]
-                       (swap-> meta-atom
-                               (dissoc :promise-loading?)
-                               (assoc :remote-messages
-                                      (wrap-message message)))
-                       result)]
-       (swap-> meta-atom
-               (assoc :promise-loading? true)
-               (dissoc :remote-messages))
-       (-> promise
-           (j/call :then complete!)
-           (j/call :catch (fn [e] (complete! {:error (ex-message e)})))))))
+   Added sugar: if an :error key is present, it will be considered the only message
+   and wrapped as {:type :error, :content error}"
+  [form promise]
+  #?(:cljs (let [meta-atom (!meta form)
+                 complete! (fn [{:as result :keys [message]}]
+                             (swap-> meta-atom
+                                     (dissoc :promise-loading?)
+                                     (assoc :remote-messages
+                                            (wrap-message message)))
+                             result)]
+             (swap-> meta-atom
+                     (assoc :promise-loading? true)
+                     (dissoc :remote-messages))
+             (-> (js/Promise.resolve promise)
+                 (j/call :then complete!)
+                 (j/call :catch (fn [e] (complete! {:error (ex-message e)})))))
+     :clj  promise))
 
 (defn clear!
   "Resets the form to initial values"
@@ -408,8 +431,8 @@
   field)
 
 (comment
- (compute-messages "abc" [:required (max-length 2)] nil)
- (compute-messages nil [:required (max-length 2)] nil))
+ (compute-messages "abc" [required (max-length 2)] nil)
+ (compute-messages nil [required (max-length 2)] nil))
 
 (defn change-handler
   "Returns a callback which resets a ref to target.value on change"
@@ -421,14 +444,14 @@
 
 (defn focus-handler
   [?field]
-  (fn [e] (swap! (!meta ?field) assoc :focused? true)))
+  (fn [e] (swap! (!meta ?field) assoc :focused true)))
 
 (defn blur-handler
   [?field]
   (util/memo-on ?field ::on-blur
                 (fn [e] (swap-> (!meta ?field)
-                                (dissoc :focused?)
-                                (assoc :touched? true)))))
+                                (dissoc :focused)
+                                (assoc :touched true)))))
 
 (comment
  ;; change-handler can be generated from cursor

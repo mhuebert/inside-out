@@ -247,7 +247,7 @@
             :meta {?email {:required true}}]
            (forms/messages form :deep true))
 
-;; ### Validator functions
+;; ### Defining validators
 
 ;; A validator is a function with the signature `(value, context) => [...message]` where `context`
 ;; is a map of sibling fields.
@@ -267,22 +267,37 @@
  {:type :invalid
   :content "A value that should be rejected"}]
 
-;; ### Async validators
+;; #### Validator Options
+
+;; Options are added by wrapping the function in `forms/validator`.
 ;;
-;; A validator can return a promise if it is wrapped in `forms/async-validator`,
-;; passing an optional `:debounce-ms` parameter. The validator will be memoized,
-;; to run only once per value.
+;; Use **conditional computation** with `:compute-when [... conditions]`
+;;
+
+(def focused-validator
+  (forms/validator (constantly (forms/message :info "Hello, focused"))
+                   :compute-when [:focused]))
+
+(cljs
+ (with-form [form {:name ?name}
+             :validators {?name [focused-validator]}]
+   [ui/input-text ?name]))
+
+;; #### Async validators
+;;
+;; Use the option `:async true` for validators that return promises.
+;; Optionally specify `:debounce-ms` to debounce invocation.
 
 #?(:cljs
    (def check-domain
      (-> (fn [value _]
-           (if (< (count value) 3)
-             (forms/message :invalid "too short" :visibility :always)
-             (p/do (p/timeout 2000)
-                   (if (even? (count value))
-                     (forms/message :info "Even: valid" :visibility :always)
-                     (forms/message :invalid "Odd: invalid" :visibility :always)))))
-         (forms/async-validator :debounce-ms 1000))))
+           (p/do (p/timeout 200)
+                 (if (even? (count value))
+                   (forms/message :info "Even: valid" :visibility :always)
+                   (forms/message :invalid "Odd: invalid" :visibility :always))))
+         (forms/validator :async true
+                          :debounce-ms 500
+                          :compute-when #{:touched}))))
 
 ;; forms/try-submit! waits for any async validation to finish before continuing
 
