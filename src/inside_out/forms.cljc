@@ -18,7 +18,7 @@
 (declare closest)
 
 (macros/support-clj-protocols
-  (deftype Field [parent compute !state metadata !meta !children]
+  (deftype Field [parent compute !state metadata !meta !children computed-messages]
     ISeqable
     (-seq [o]
       (if (:many metadata)
@@ -49,8 +49,6 @@
     IMeta
     (-meta [o] (merge metadata @!meta))
 
-    IWithMeta
-    (-with-meta [o meta] (Field. parent compute !state meta !meta !children))
     IFn
     (-invoke [this bindings]
       (if-let [many (:many metadata)]
@@ -135,6 +133,7 @@
                   (get cache value)
                   (request! value context error))))))))
 
+(declare compute-messages)
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]
   {:pre [sym]}
@@ -149,12 +148,18 @@
                                                  attribute (concat (% attribute))))))
         meta (-> (merge inherited-meta meta)
                  (update :validators (partial mapv #(cond-> % (::async (core/meta %)) (init-async-validator!)))))
+        validators (:validators meta)
         field (->Field parent
                        compute
                        (atom* (:init meta))
                        meta
                        (atom* {})
-                       (clojure.core/atom {}))]
+                       (clojure.core/atom {})
+                       nil)]
+    (set! (.-computed-messages field)
+          #?(:cljs (ratom/make-reaction (fn []
+                                          (compute-messages field)))
+             :clj  (reify clojure.lang.IDeref (deref [_] (compute-messages field)))))
     field))
 
 (declare make-binding!)
@@ -277,13 +282,15 @@
   (let [ch (vals @(!children ?field))]
     (concat ch (mapcat descendants ch))))
 
+(defn computed-messages [^Field field] @(.-computed-messages field))
+
 (defn messages
   "Returns validator messages for a field/form"
   [field & {:keys [deep]}]
   (concat (:remote-messages field)
           (if deep
             (mapcat compute-messages (cons field (descendants field)))
-            (compute-messages field))))
+            (computed-messages field))))
 
 (defn show-message?
   "Returns true if message should be shown, based on :visibility of message
@@ -326,6 +333,9 @@
   [coll]
   (into #{} (map :type) coll))
 
+(defn in-progress? [form]
+  (:in-progress (types (messages form :deep true))))
+
 (defn valid?
   "Returns true if field & descendants are valid"
   [field & {:keys [deep] :or {deep true}}]
@@ -343,6 +353,26 @@
   (and (not (:loading? form))
        (valid? form)))
 
+
+#?(:cljs
+   (defn wait-for-async-validators
+     "Returns promise which resolves when form has no :in-progress fields (async validators)"
+     ^js [^Field form]
+     (let [watch-key (gensym "wait-for-async-validators")]
+       (js/Promise.
+        (fn [resolve reject]
+          (if-not (in-progress? form)
+            (resolve)
+            (let [waiting? (reagent/track! #(:in-progress (types (messages form :deep true))))]
+              (if-not @waiting?
+                (resolve)
+                (add-watch waiting? watch-key
+                           (fn [_ _ _ is-waiting?]
+                             (when-not is-waiting?
+                               (remove-watch waiting? watch-key)
+                               (reagent/dispose! waiting?)
+                               (resolve))))))))))))
+
 #?(:cljs
    (defn watch-promise
      "Wraps a promise to store :loading? and :remote-messages as reactive metadata on `form`.
@@ -356,12 +386,12 @@
      (let [meta-atom (!meta form)
            complete! (fn [{:as result :keys [message]}]
                        (swap-> meta-atom
-                               (dissoc :loading?)
+                               (dissoc :promise-loading?)
                                (assoc :remote-messages
                                       (wrap-message message)))
                        result)]
        (swap-> meta-atom
-               (assoc :loading? true)
+               (assoc :promise-loading? true)
                (dissoc :remote-messages))
        (-> promise
            (j/call :then complete!)
@@ -407,11 +437,20 @@
 
 (defmacro form [expr & opts] `(inside-out.macros/form ~expr ~@opts))
 (defmacro try-submit!
-  "If form is submittable, evaluate and watch `promise`, otherwise touch form."
+  "If form is submittable, evaluate and watch `promise`, otherwise touch form.
+   Waits for any async validators to complete."
   [form promise]
-  `(if (submittable? ~form)
-     (watch-promise ~form ~promise)
-     (touch! ~form)))
+  (if (:ns &env)
+    `(when-not (:promise-loading? ~form)
+       (touch! ~form)
+       (watch-promise ~form
+         (-> (wait-for-async-validators ~form)
+             (.then (fn []
+                      (when (valid? ~form)
+                        ~promise))))))
+    `(if (submittable? ~form)
+       (watch-promise ~form ~promise)
+       (touch! ~form))))
 
 (defmacro for-many [[as ?field] expr]
   (let [bindings (-> &env (find ?field) key meta :many/bindings)]

@@ -278,17 +278,20 @@
      (-> (fn [value _]
            (if (< (count value) 3)
              (forms/message :invalid "too short" :visibility :always)
-             (p/do (p/timeout 500)
+             (p/do (p/timeout 2000)
                    (if (even? (count value))
                      (forms/message :info "Even: valid" :visibility :always)
                      (forms/message :invalid "Odd: invalid" :visibility :always)))))
          (forms/async-validator :debounce-ms 1000))))
 
+;; forms/try-submit! waits for any async validation to finish before continuing
+
 (cljs
  (with-form [form {:domain (?domain :validators [check-domain])}]
-   [:div
+   [:form {:on-submit (fn [^js e]
+                        (.preventDefault e)
+                        (forms/try-submit! form (prn :submitting @form)))}
     [ui/input-text ?domain]
-
     [:pre (str (forms/messages ?domain))]
     [:pre "submittable? " (str (forms/submittable? form))]]))
 
