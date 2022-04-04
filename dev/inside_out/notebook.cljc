@@ -275,8 +275,6 @@
 ;; (forms/validator f :async true)
 ;; ```
 ;;
-;; Options:
-;;
 ;;- `:compute-when [...condition]` - only compute when at least one condition
 ;;  is met (`:focused`, `:touched`)
 ;;- `:async <boolean>` - allows validator to return a promise. results are
