@@ -18,7 +18,7 @@
 
 (defn catch [p handle-e]
   #?(:cljs (.catch p handle-e)
-     :clj p))
+     :clj  p))
 
 (defn- do* [exprs]
   (if (< (count exprs) 2)
@@ -35,9 +35,9 @@
     `(clojure.core/do ~@body)))
 
 (defmacro let [bindings & body]
-  (let [bindings (concat (first bindings)
-                         `(resolved ~(second bindings))
-                         (drop 2 bindings))]
+  (clojure.core/let [bindings (list* (first bindings)
+                                     `(resolved ~(second bindings))
+                                      (drop 2 bindings))]
     (letfn [(rec [[name init & bindings] body]
               (if name
                 `(then ~init (fn [~name] ~(rec bindings body)))
