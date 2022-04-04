@@ -247,7 +247,7 @@
             :meta {?email {:required true}}]
   (forms/messages form :deep true))
 
-;; ### Defining validators
+;; ### Validator functions
 
 ;; A validator is a function with the signature `(value, context) => [...message]` where `context`
 ;; is a map of sibling fields.
@@ -267,9 +267,9 @@
  {:type :invalid
   :content "A value that should be rejected"}]
 
-;; #### Validator Options
+;; ### Options
 
-;; Options may be added to a validator by wrapping with `forms/validator`.
+;; Options may be added to a validator function by wrapping with `forms/validator`.
 ;;
 ;; ```clj
 ;; (forms/validator f :async true)
