@@ -10,7 +10,7 @@
                    (shell "yarn shadow-cljs -A:dev:clerk release clerk")
                    (shell "clojure -X:dev:clerk user/publish!")
                    (shell "rm public/index.html")
-                   (shell "mv public/dev/inside_out/notebook.htmlc" "public/index.html")
+                   (shell "mv public/dev/inside_out/notebook.html" "public/index.html")
                    (shell "touch public/CNAME")
                    (run 'sha)
                    (spit "public/CNAME" "inside-out.matt.is"))}}
