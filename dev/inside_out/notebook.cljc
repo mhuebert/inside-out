@@ -284,7 +284,7 @@
 ;;
 
 (def focused-validator
-  (forms/validator (constantly (forms/message :info "Hello, focused"))
+  (forms/validator (fn [value _] (forms/message :info (str "Hello, " value)))
                    :compute-when [:focused]))
 
 (cljs
