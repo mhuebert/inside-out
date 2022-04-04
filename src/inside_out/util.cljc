@@ -1,7 +1,6 @@
 (ns inside-out.util
   (:refer-clojure :exclude [assoc-in update-vals])
-  (:require [applied-science.js-interop :as j]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [clojure.core :as core]))
 
 (defn guard
@@ -15,15 +14,6 @@
   (if (= path [])
     value
     (clojure.core/assoc-in root path value)))
-
-(defn memo-on
-  "clj: returns value
-   cljs: memoizes value by writing to `key` of `obj`, returns value"
-  [obj key value]
-  #?(:clj value
-     :cljs (j/!get obj ^keyword key
-                   (do (j/!set obj ^keyword key value)
-                       value))))
 
 (defn update-vals [m f]
   #?(:clj (clojure.core/update-vals m f)

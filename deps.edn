@@ -10,7 +10,6 @@
           :extra-deps {
                        io.github.nextjournal/clerk {:git/sha "49237971ccf850d2f933b12d5b0c1b4dfa64b12b"
                                                     #_#_:mvn/version "0.6.387"}
-                       mhuebert/kitchen-async {:mvn/version "0.1.0"}
 
                        ;; for static build
                        applied-science/js-interop {:mvn/version "0.3.3"}

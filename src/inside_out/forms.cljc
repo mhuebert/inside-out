@@ -4,10 +4,10 @@
   (:require #?@(:cljs [[reagent.core :as reagent]
                        [reagent.ratom :as ratom]])
             [clojure.core :as core]
-            [applied-science.js-interop :as j]
             [clojure.string :as str]
             [inside-out.macros :as macros :refer [swap->]]
-            [inside-out.util :as util :refer [assoc-in update-vals]])
+            [inside-out.util :as util :refer [assoc-in update-vals]]
+            [inside-out.promise :as p])
   #?(:cljs (:require-macros [inside-out.forms])))
 
 ;; intended to be overridden via set! in cljs
@@ -115,19 +115,17 @@
                       (fn [value context error]
                         (let [this-req (inc (:req @state 0))]
                           (swap! state assoc :in-progress? true :req this-req)
-                          (-> (js/Promise.resolve (f value context state))
-                              (j/call :then
-                                (fn [result]
-                                  (swap-> state
-                                          (assoc-in [:cache value] result)
-                                          (cond-> (= this-req (:req @state))
-                                                  (dissoc :in-progress? :error)))))
-                              (j/call :catch
-                                (fn [err]
-                                  (when (= this-req (:req @state))
-                                    (swap-> state
-                                            (dissoc :in-progress?)
-                                            (assoc :error (message :error (str "Validation error: " err))))))))
+                          (p/catch
+                           (p/let [result (f value context state)]
+                             (swap-> state
+                                     (assoc-in [:cache value] result)
+                                     (cond-> (= this-req (:req @state))
+                                             (dissoc :in-progress? :error))))
+                           (fn [e]
+                             (when (= this-req (:req @state))
+                               (swap-> state
+                                       (dissoc :in-progress?)
+                                       (assoc :error (message :error (str "Validation error: " e)))))))
                           (keep identity [error progress-msg]))))]
        (fn async-validate [value context]
          #?(:cljs
@@ -378,7 +376,7 @@
        (valid? form)))
 
 #?(:cljs
-   (defn wait-for-async-validators
+   (defn wait-for-async-validators+
      "Returns promise which resolves when form has no :in-progress fields"
      ^js [^Field form]
      (let [watch-key (gensym "wait-for-async-validators")]
@@ -416,9 +414,9 @@
        (swap-> meta-atom
                (assoc :promise-loading? true)
                (dissoc :remote-messages))
-       (-> (js/Promise.resolve promise)
-           (j/call :then complete!)
-           (j/call :catch (fn [e] (complete! {:error (ex-message e)})))))
+       (p/catch
+        (p/-> promise complete!)
+        (fn [e] (complete! {:error (ex-message e)}))))
      :clj promise))
 
 (defn clear!
@@ -441,7 +439,7 @@
   ([?field {:as options :keys [parse-value]
             :or {parse-value #(util/guard % (partial not= ""))}}]
    (fn [e]
-     (reset! ?field (parse-value #?(:cljs (j/get-in e [:target :value])))))))
+     (reset! ?field (parse-value #?(:cljs (.. ^js e -target -value)))))))
 
 (defn focus-handler
   [?field]
@@ -449,10 +447,10 @@
 
 (defn blur-handler
   [?field]
-  (util/memo-on ?field ::on-blur
-                (fn [e] (swap-> (!meta ?field)
-                                (dissoc :focused)
-                                (assoc :touched true)))))
+  (fn [_e]
+    (swap-> (!meta ?field)
+            (dissoc :focused)
+            (assoc :touched true))))
 
 (comment
  ;; change-handler can be generated from cursor
@@ -465,22 +463,20 @@
   "[async] Touches form, waits for async validators to complete, returns true if form is valid."
   [form]
   (touch! form)
-  (-> (wait-for-async-validators form)
-      (j/call :then #(valid? form))))
+  #?(:cljs
+     (p/do (wait-for-async-validators+ form)
+           (valid? form))
+     :clj (valid? form)))
 
 (defmacro try-submit+
   "[async] Evaluates `submit-expr` if valid?+ returns true"
   [form submit-expr]
   (if (:ns &env)
-    `(watch-promise !form
-       (-> (valid?+ form)
-           (j/call :then
-             (fn [valid?#]
-               (when valid?# ~submit-expr)))))
+    `(watch-promise ~form
+       (p/when (valid?+ ~form)
+         ~submit-expr))
     `(do (touch! ~form)
          (when (submittable? ~form) ~submit-expr))))
-
-
 
 (defmacro for-many [[as ?field] expr]
   (let [bindings (-> &env (find ?field) key meta :many/bindings)]

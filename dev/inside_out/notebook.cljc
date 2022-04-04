@@ -37,7 +37,7 @@
 
             [clojure.string :as str]
             [inside-out.clerk-ui :as ui :refer [cljs]]
-            [kitchen-async.promise :as p]))
+            [inside-out.promise :as p]))
 
 ;; &nbsp;
 
@@ -461,20 +461,20 @@
                                  (forms/visible-messages form))))
     [:button.bg-blue-500.text-white.p-3.m-3
      {:on-click #(forms/try-submit+ form
-                   (p/let [name @?name
-                           result (p/timeout 500)]
+                   (p/do (p/timeout 500)
                      {:message (str "Thanks, " name "!")}))}
      "Submit-Success"]
     [:button.bg-red-500.text-white.p-3.m-3
      {:on-click
       #(forms/try-submit+ form
-         (p/let [name @?name
-                 result (p/timeout 500)]
+         (p/do
+           (p/timeout 500)
            {:message
             {:type :error
-             :content (str "Sorry " name ", an error occurred.")}}))}
+             :content (str "Sorry " @?name ", an error occurred.")}}))}
      "Submit-Error"]]))
 
+(macroexpand '(p/cond x 1 y 2))
 ;; `forms/clear!` resets a form to its initial state
 
 (cljs
