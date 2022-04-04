@@ -3,18 +3,20 @@
   ;; https://github.com/athos/kitchen-async
   (:refer-clojure :exclude [do try -> let when cond])
   (:require [applied-science.js-interop :as j]
+            [inside-out.util :refer [guard]]
             [clojure.core :as core])
   #?(:cljs (:require-macros inside-out.promise)))
 
 #?(:cljs
-   (defn then [^js p f] (.then p f))
-   :clj
-   (defn then [p f] (f p)))
+   (defn promise? [x] (js-fn? (some-> x (unchecked-get "then")))))
 
 #?(:cljs
-   (defn resolved ^js [x] (js/Promise.resolve x))
+   (defn then [^js p f]
+     (if (promise? p)
+       (.then p f)
+       (f p)))
    :clj
-   (def resolved identity))
+   (defn then [p f] (f p)))
 
 (defn catch [p handle-e]
   #?(:cljs (.catch p handle-e)
@@ -27,7 +29,7 @@
               (if (empty? exprs)
                 expr
                 `(then ~expr (fn [_#] ~(rec (first exprs) (rest exprs))))))]
-      (rec `(resolved ~(first exprs)) (rest exprs)))))
+      (rec (first exprs) (rest exprs)))))
 
 (defmacro do [& body]
   (if (:ns &env)
@@ -35,14 +37,11 @@
     `(clojure.core/do ~@body)))
 
 (defmacro let [bindings & body]
-  (clojure.core/let [bindings (list* (first bindings)
-                                     `(resolved ~(second bindings))
-                                      (drop 2 bindings))]
-    (letfn [(rec [[name init & bindings] body]
-              (if name
-                `(then ~init (fn [~name] ~(rec bindings body)))
-                (do* body)))]
-      (rec bindings body))))
+  (letfn [(rec [[name init & bindings] body]
+            (if name
+              `(then ~init (fn [~name] ~(rec bindings body)))
+              (do* body)))]
+    (rec bindings body)))
 
 (defmacro -> [x & forms]
   (if forms
