@@ -105,34 +105,34 @@
 (defn validator [f & {:as options :keys [async debounce-ms when-touched]}]
   (vary-meta f assoc ::validator options))
 
-(defn- wrap-async-validator! [f {:keys [debounce-ms]} field]
+(defn- wrap-async-validator! [f {:keys [debounce-ms]} _field]
   #?(:clj
      f
      :cljs
      (let [state (atom* nil)
-           in-progress (message :in-progress "Loading...")
+           progress-msg (message :in-progress "Loading...")
            request! (debounce debounce-ms
                       (fn [value context error]
                         (let [this-req (inc (:req @state 0))]
-                          (swap! state assoc :loading? true :req this-req)
+                          (swap! state assoc :in-progress? true :req this-req)
                           (-> (js/Promise.resolve (f value context state))
                               (j/call :then
                                 (fn [result]
                                   (swap-> state
                                           (assoc-in [:cache value] result)
                                           (cond-> (= this-req (:req @state))
-                                                  (dissoc :loading? :error)))))
+                                                  (dissoc :in-progress? :error)))))
                               (j/call :catch
                                 (fn [err]
                                   (when (= this-req (:req @state))
                                     (swap-> state
-                                            (dissoc :loading?)
+                                            (dissoc :in-progress?)
                                             (assoc :error (message :error (str "Validation error: " err))))))))
-                          (keep identity [error in-progress]))))]
+                          (keep identity [error progress-msg]))))]
        (fn async-validate [value context]
          #?(:cljs
-            (let [{:keys [loading? cache error] :as st} @state]
-              (or (when loading? in-progress)
+            (let [{:keys [in-progress? cache error] :as st} @state]
+              (or (when in-progress? progress-msg)
                   (get cache value)
                   (request! value context error))))))))
 
@@ -147,7 +147,7 @@
 (defn wrap-compute-when [f {:keys [compute-when]} field]
   (fn [value context]
     (when (get-any compute-when field)
-          (f value context))))
+      (f value context))))
 
 (defn init-validator [f field]
   (if-let [options (some-> (meta f) ::validator)]
@@ -356,9 +356,6 @@
   [coll]
   (into #{} (map :type) coll))
 
-(defn in-progress? [form]
-  (:in-progress (types (messages form :deep true))))
-
 (defn valid?
   "Returns true if field & descendants are valid"
   [field & {:keys [deep] :or {deep true}}]
@@ -370,34 +367,37 @@
 
 (defn touch! [form] (swap! (!meta form) assoc :touched true))
 
+(defn in-progress? [form]
+  (:in-progress (types (messages form :deep true))))
+
 (defn submittable?
   "Returns true if submission should be enabled (form is valid & not loading)"
   [form]
-  (and (not (:loading? form))
+  (and (not (:promise-loading? form))
+       (not (in-progress? form))
        (valid? form)))
-
 
 #?(:cljs
    (defn wait-for-async-validators
-     "Returns promise which resolves when form has no :in-progress fields (async validators)"
+     "Returns promise which resolves when form has no :in-progress fields"
      ^js [^Field form]
      (let [watch-key (gensym "wait-for-async-validators")]
        (js/Promise.
         (fn [resolve reject]
-          (if-not (in-progress? form)
-            (resolve)
-            (let [waiting? (reagent/track! #(:in-progress (types (messages form :deep true))))]
-              (if-not @waiting?
-                (resolve)
-                (add-watch waiting? watch-key
-                           (fn [_ _ _ is-waiting?]
-                             (when-not is-waiting?
-                               (remove-watch waiting? watch-key)
-                               (reagent/dispose! waiting?)
-                               (resolve))))))))))))
+          (let [waiting? (reagent/track! #(in-progress? form))
+                stop! (fn []
+                        (remove-watch waiting? watch-key)
+                        (reagent/dispose! waiting?)
+                        (resolve))]
+            (if @waiting?
+              (add-watch waiting? watch-key
+                         (fn [_ _ _ is-waiting?]
+                           (when-not is-waiting?
+                             (stop!))))
+              (stop!))))))))
 
 (defn watch-promise
-  "Wraps a promise to store :loading? and :remote-messages as reactive metadata on `form`.
+  "Wraps a promise to store :promise-loading? and :remote-messages as reactive metadata on `form`.
 
    If the promise resolves to a map containing :messages, these will be set as
    the form's :remote-messages, which are included in `(messages form)`.
@@ -405,20 +405,21 @@
    Added sugar: if an :error key is present, it will be considered the only message
    and wrapped as {:type :error, :content error}"
   [form promise]
-  #?(:cljs (let [meta-atom (!meta form)
-                 complete! (fn [{:as result :keys [message]}]
-                             (swap-> meta-atom
-                                     (dissoc :promise-loading?)
-                                     (assoc :remote-messages
-                                            (wrap-message message)))
-                             result)]
-             (swap-> meta-atom
-                     (assoc :promise-loading? true)
-                     (dissoc :remote-messages))
-             (-> (js/Promise.resolve promise)
-                 (j/call :then complete!)
-                 (j/call :catch (fn [e] (complete! {:error (ex-message e)})))))
-     :clj  promise))
+  #?(:cljs
+     (let [meta-atom (!meta form)
+           complete! (fn [{:as result :keys [message]}]
+                       (swap-> meta-atom
+                               (dissoc :promise-loading?)
+                               (assoc :remote-messages
+                                      (wrap-message message)))
+                       result)]
+       (swap-> meta-atom
+               (assoc :promise-loading? true)
+               (dissoc :remote-messages))
+       (-> (js/Promise.resolve promise)
+           (j/call :then complete!)
+           (j/call :catch (fn [e] (complete! {:error (ex-message e)})))))
+     :clj promise))
 
 (defn clear!
   "Resets the form to initial values"
@@ -459,21 +460,27 @@
 
 
 (defmacro form [expr & opts] `(inside-out.macros/form ~expr ~@opts))
-(defmacro try-submit!
-  "If form is submittable, evaluate and watch `promise`, otherwise touch form.
-   Waits for any async validators to complete."
-  [form promise]
+
+(defn valid?+
+  "[async] Touches form, waits for async validators to complete, returns true if form is valid."
+  [form]
+  (touch! form)
+  (-> (wait-for-async-validators form)
+      (j/call :then #(valid? form))))
+
+(defmacro try-submit+
+  "[async] Evaluates `submit-expr` if valid?+ returns true"
+  [form submit-expr]
   (if (:ns &env)
-    `(when-not (:promise-loading? ~form)
-       (touch! ~form)
-       (watch-promise ~form
-         (-> (wait-for-async-validators ~form)
-             (.then (fn []
-                      (when (valid? ~form)
-                        ~promise))))))
-    `(if (submittable? ~form)
-       (watch-promise ~form ~promise)
-       (touch! ~form))))
+    `(watch-promise !form
+       (-> (valid?+ form)
+           (j/call :then
+             (fn [valid?#]
+               (when valid?# ~submit-expr)))))
+    `(do (touch! ~form)
+         (when (submittable? ~form) ~submit-expr))))
+
+
 
 (defmacro for-many [[as ?field] expr]
   (let [bindings (-> &env (find ?field) key meta :many/bindings)]
