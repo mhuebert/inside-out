@@ -269,15 +269,19 @@
 
 ;; #### Validator Options
 
-;; Options are added by wrapping a validator function in `forms/validator`.
+;; Options may be added to a validator by wrapping with `forms/validator`.
 ;;
-;; Supported options:
+;; ```clj
+;; (forms/validator f :async true)
+;; ```
 ;;
-;;- `:compute-when [...condition]` - do not compute the validator except when
-;;  one of the conditions are met (`:focused`, `:touched`)
+;; Options:
+;;
+;;- `:compute-when [...condition]` - only compute when at least one condition
+;;  is met (`:focused`, `:touched`)
 ;;- `:async <boolean>` - allows validator to return a promise. results are
 ;;  cached by value.
-;;- `:debounce-ms <ms>` - only relevant when `:async true` - waits until function
+;;- `:debounce-ms <ms>` (only relevant when `:async true`) waits until function
 ;;  hasn't been called for the given period of time before evaluating again.
 ;;
 
@@ -290,10 +294,7 @@
              :validators {?name [focused-validator]}]
    [ui/input-text ?name]))
 
-;; #### Async validators
-;;
-;; Use the option `:async true` for validators that return promises.
-;; Optionally specify `:debounce-ms` to debounce invocation.
+;; Async example
 
 #?(:cljs
    (def check-domain
