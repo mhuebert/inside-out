@@ -283,13 +283,10 @@
 ;;  hasn't been called for the given period of time before evaluating again.
 ;;
 
-(def focused-validator
-  (forms/validator (fn [value _] (forms/message :info (str "Hello, " value)))
-                   :compute-when [:focused]))
-
 (cljs
  (with-form [form {:name ?name}
-             :validators {?name [focused-validator]}]
+             :validators {?name [(-> (fn [value _] (forms/message :info (str "Hello, " value)))
+                                     (forms/validator :compute-when [:focused]))]}]
    [ui/input-text ?name]))
 
 ;; Async example
@@ -498,9 +495,9 @@
 
 ;; In ClojureScript, `with-form` uses [Reagent's](http://reagent-project.github.io)  `with-let` macro,
 ;; so that a form is created once (when a component mounts) and we can use the fields with input components.
+;; We also use reagent's reactive atoms and reactions for reactivity.
 
-;; PRs are welcome for integrations other than Reagent. All that is required is a macro which behaves
-;; like `with-let` ("finally" behaviour is not required). See `inside-out.reagent` for macro implementation.
+;; If you'd like to implement inside-out for view libraries other than Reagent, please get in touch.
 
 ;; ## The 'form' macro
 
