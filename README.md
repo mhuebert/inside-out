@@ -1,6 +1,6 @@
 # Inside-Out: A Clojure forms library
 
-See [Inside-Out: Documentation](https://github.com/mhuebert/inside-out/blob/main/dev/inside_out/notebook.cljc)
+See Inside-Out: Documentation [Notebook](http://inside-out.matt.is/) and [Source](https://github.com/mhuebert/inside-out/blob/main/dev/inside_out/notebook.cljc)
 
 ```clj 
 io.github.mhuebert/inside-out {:git/sha "SHA"}
