@@ -371,7 +371,7 @@
 (defn submittable?
   "Returns true if submission should be enabled (form is valid & not loading)"
   [form]
-  (and (not (:promise-loading? form))
+  (and (not (:loading? form))
        (not (in-progress? form))
        (valid? form)))
 
@@ -395,7 +395,7 @@
               (stop!))))))))
 
 (defn watch-promise
-  "Wraps a promise to store :promise-loading? and :remote-messages as reactive metadata on `form`.
+  "Wraps a promise to store :loading? and :remote-messages as reactive metadata on `form`.
 
    If the promise resolves to a map containing :messages, these will be set as
    the form's :remote-messages, which are included in `(messages form)`.
@@ -407,12 +407,12 @@
      (let [meta-atom (!meta form)
            complete! (fn [{:as result :keys [message]}]
                        (swap-> meta-atom
-                               (dissoc :promise-loading?)
+                               (dissoc :loading?)
                                (assoc :remote-messages
                                       (wrap-message message)))
                        result)]
        (swap-> meta-atom
-               (assoc :promise-loading? true)
+               (assoc :loading? true)
                (dissoc :remote-messages))
        (p/catch
         (p/-> promise complete!)
