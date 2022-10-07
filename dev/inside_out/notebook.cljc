@@ -453,21 +453,19 @@
     [:pre.text-xs.whitespace-pre-wrap (str @form)]
     (into [:div]
           (map ui/view-message (if (:loading? form)
-                                 (forms/wrap-message "Loading...")
+                                 (forms/wrap-messages "Loading...")
                                  (forms/visible-messages form))))
     [:button.bg-blue-500.text-white.p-3.m-3
      {:on-click #(forms/try-submit+ form
                    (p/do (p/timeout 500)
-                     {:message (str "Thanks, " name "!")}))}
+                     {:info (str "Thanks, " name "!")}))}
      "Submit-Success"]
     [:button.bg-red-500.text-white.p-3.m-3
      {:on-click
       #(forms/try-submit+ form
          (p/do
            (p/timeout 500)
-           {:message
-            {:type :error
-             :content (str "Sorry " @?name ", an error occurred.")}}))}
+           {:error (str "Sorry " @?name ", an error occurred.")}))}
      "Submit-Error"]]))
 
 (macroexpand '(p/cond x 1 y 2))

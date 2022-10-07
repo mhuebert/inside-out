@@ -155,7 +155,35 @@
               compute-when (wrap-compute-when options field)))
     f))
 
-(declare compute-messages required field-context)
+(declare compute-messages field-context)
+
+
+;; ## Validation
+
+(def required
+  (fn [value _]
+    (when (nil? value)
+      {:type :invalid :content "Required"})))
+
+(defn max-length
+  "Returns a validator which restricts `count` of input to max `i`"
+  [i]
+  (fn [value _]
+    (when (and value (> (count value) i))
+      {:type :invalid
+       :content (str "Too long (max " i " chars)")})))
+
+(defn min-length
+  "Returns a validator which restricts `count` of input to min `i`"
+  [i]
+  (fn [value _]
+    (when (and value (< (count value) i))
+      {:type :invalid
+       :content (str "Too short (min " i " chars)")})))
+
+(defonce !validators (atom* {:required required
+                             :max-length max-length
+                             :min-length min-length}))
 
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]
@@ -177,8 +205,8 @@
                        (atom* {})
                        (clojure.core/atom {}))
         validators (->> (:validators meta)
-                        (concat (when (:required meta) [required]))
-                        (replace {:required required})
+                        (concat (when (:required meta) [:required]))
+                        (replace {:required (:required @!validators)})
                         (mapv #(init-validator % field)))
         messages-fn #(compute-messages @field validators (field-context field))]
     (swap! (!meta field) assoc :!messages
@@ -241,29 +269,6 @@
     (doseq [field-meta fields] (make-binding! root-field field-meta))
     root-field))
 
-;; ## Validation
-
-(def required
-  (fn [value & _]
-    (when (nil? value)
-      {:type :invalid :content "Required"})))
-
-(defn max-length
-  "Returns a validator which restricts `count` of input to max `i`"
-  [i]
-  (fn [value & [_context]]
-    (when (and value (> (count value) i))
-      {:type :invalid
-       :content (str "Too long (max " i " chars)")})))
-
-(defn min-length
-  "Returns a validator which restricts `count` of input to min `i`"
-  [i]
-  (fn [value & [_context]]
-    (when (and value (< (count value) i))
-      {:type :invalid
-       :content (str "Too short (min " i " chars)")})))
-
 (defn debug-name [?field]
   (->> (iterate parent ?field)
        (take-while identity)
@@ -278,10 +283,13 @@
     :sym (:sym field)
     #_#_:path (debug-name field)))
 
-(defn wrap-message [m]
-  (cond (string? m) [{:content m}]
-        (map? m) [m]
-        :else m))
+(defn wrap-messages
+  ([m] (wrap-messages :invalid m))
+  ([default-type m]
+   (cond (string? m) [{:content m :type default-type}]
+         (map? m) [m]
+         (sequential? m) (into (empty m) (map (partial wrap-messages default-type)) m)
+         :else m)))
 
 (defn compute-messages
   ([field]
@@ -289,7 +297,7 @@
   ([value validators context]
    (->> validators
         (into [] (comp
-                  (mapcat #(wrap-message (% value context)))
+                  (mapcat #(wrap-messages :invalid (% value context)))
                   (keep identity)
                   (map (fn [x]
                          (assert (and (map? x) (:type x))
@@ -332,22 +340,19 @@
 
 (def message-order
   ;; show errors above hint
-  {:invalid 1
+  {:error 0
+   :invalid 1
    :hint 2})
 
-(def nonbreaking-space "the &nbsp; character (for taking up space when no messages are present)"
-  \u00A0)
-(def empty-message {:content nonbreaking-space})
-
 (defn visible-messages
-  "Returns messages visible for field (not recursive), or the `not-found` message (default: a nonbreaking-space)"
-  ([?field] (visible-messages ?field nonbreaking-space))
+  "Returns messages visible for field (not recursive), or the `not-found` message"
+  ([?field] (visible-messages ?field nil))
   ([?field not-found]
    (or (->> (messages ?field :deep false)
             (sort-by (comp message-order :type))
             (filter (partial show-message? ?field))
             seq)
-       (wrap-message not-found))))
+       not-found)))
 
 (defn types
   "Returns set of :type values present in coll"
@@ -400,19 +405,20 @@
 (defn watch-promise
   "Wraps a promise to store :loading? and :remote-messages as reactive metadata on `form`.
 
-   If the promise resolves to a map containing :messages, these will be set as
-   the form's :remote-messages, which are included in `(messages form)`.
 
-   Added sugar: if an :error key is present, it will be considered the only message
-   and wrapped as {:type :error, :content error}"
+   If the promise resolves to a map containing :error, :invalid, :info, or :messages,
+   it will be set to the form's :remote-messages, which are included in `(messages form)`."
   [form promise]
   #?(:cljs
      (let [meta-atom (!meta form)
-           complete! (fn [{:as result :keys [message]}]
+           complete! (fn [{:as result :keys [messages error invalid info]}]
                        (swap-> meta-atom
                                (dissoc :loading?)
                                (assoc :remote-messages
-                                      (wrap-message message)))
+                                      (cond messages (wrap-messages messages)
+                                            error (wrap-messages :error error)
+                                            invalid (wrap-messages :invalid invalid)
+                                            info (wrap-messages :info info))))
                        result)]
        (swap-> meta-atom
                (assoc :loading? true)

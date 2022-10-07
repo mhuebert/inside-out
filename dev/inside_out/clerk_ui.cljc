@@ -46,6 +46,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Form-specific UI stuff
 
+
+(def nonbreaking-space "the &nbsp; character (for taking up space when no messages are present)"
+  \u00A0)
+(def empty-message {:content nonbreaking-space})
+
 (def invalid-border-color "red")
 (def invalid-text-color "red")
 (def invalid-bg-color "light-pink")
