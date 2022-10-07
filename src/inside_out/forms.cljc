@@ -394,6 +394,9 @@
                              (stop!))))
               (stop!))))))))
 
+(defn clear-remote-messages! [!form]
+  (swap! (!meta !form) dissoc :remote-messages))
+
 (defn watch-promise
   "Wraps a promise to store :loading? and :remote-messages as reactive metadata on `form`.
 
