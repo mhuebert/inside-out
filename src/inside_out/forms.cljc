@@ -45,6 +45,11 @@
     IReset
     (-reset! [o new-value]
       (reset! !state new-value))
+    #?@(:cljs [ISwap])
+    (-swap! [o f] (swap! !state f))
+    (-swap! [o f a] (swap! !state o f a))
+    (-swap! [o f a b] (swap! !state o f a b))
+    (-swap! [o f a b xs] (swap! !state o f a b xs))
 
     IMeta
     (-meta [o] (merge metadata @!meta))
@@ -147,18 +152,18 @@
     (when (get-any compute-when field)
       (f value context))))
 
-(defn init-validator [f field]
-  (if-let [options (some-> (meta f) ::validator)]
-    (let [{:keys [async compute-when]} options]
-      (cond-> f
-              async (wrap-async-validator! options field)
-              compute-when (wrap-compute-when options field)))
-    f))
-
 (declare compute-messages field-context)
 
 
 ;; ## Validation
+
+(defn in-set
+  "Returns a validator for checking that a value is a member of a set"
+  [set]
+  (fn [v _]
+    (when-not (contains? set v)
+      {:type :invalid
+       :message (str "Value " v " must be one of " set)})))
 
 (def required
   (fn [value _]
@@ -181,9 +186,25 @@
       {:type :invalid
        :content (str "Too short (min " i " chars)")})))
 
+(defn init-validator [f field]
+  (let [f (cond-> f (set? f) in-set)]
+    (if-let [options (some-> (meta f) ::validator)]
+      (let [{:keys [async compute-when]} options]
+        (cond-> f
+                async (wrap-async-validator! options field)
+                compute-when (wrap-compute-when options field)))
+      f)))
+
 (defonce !validators (atom* {:required required
                              :max-length max-length
                              :min-length min-length}))
+
+(defn ensure-vec [x]
+  (when x
+    (prn :nesure-vec x))
+  (if (vector x)
+    x
+    [x]))
 
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]
@@ -205,6 +226,7 @@
                        (atom* {})
                        (clojure.core/atom {}))
         validators (->> (:validators meta)
+                        ensure-vec
                         (concat (when (:required meta) [:required]))
                         (replace {:required (:required @!validators)})
                         (mapv #(init-validator % field)))
@@ -296,6 +318,7 @@
    (compute-messages @field (:validators field) (field-context field)))
   ([value validators context]
    (->> validators
+        ensure-vec
         (into [] (comp
                   (mapcat #(wrap-messages :invalid (% value context)))
                   (keep identity)

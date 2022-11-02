@@ -31,6 +31,9 @@
                         IReset clojure.lang.IAtom
                         -reset! reset
 
+                        ISwap clojure.lang.IAtom
+                        -swap! swap
+
                         IMeta clojure.lang.IMeta
                         -meta meta
 

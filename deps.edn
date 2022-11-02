@@ -1,21 +1,22 @@
-{:deps {org.clojure/clojure {:mvn/version "1.11.0"}
-        org.clojure/clojurescript {:mvn/version "1.10.914"}
-        rewrite-clj/rewrite-clj {:mvn/version "1.0.644-alpha"}
+{:deps {org.clojure/clojure {:mvn/version "1.11.1"}
+        org.clojure/clojurescript {:mvn/version "1.11.60"}
+        rewrite-clj/rewrite-clj {:mvn/version "1.1.45"}
         applied-science/js-interop {:mvn/version "0.3.1"}
         reagent/reagent {:mvn/version "1.1.0"}}
  :aliases
- {:dev {:extra-paths ["dev"]
-        :extra-deps {thheller/shadow-cljs {:mvn/version "2.16.12"}}}
+ {:nextjournal/clerk
+  {:extra-paths ["dev"]
+   :exec-fn inside-out.clerk-build/build!
+   :nextjournal.clerk/aliases [:dev :clerk]
+   }
   :clerk {:extra-paths ["dev"]
-          :extra-deps {
-                       io.github.nextjournal/clerk {:git/sha "49237971ccf850d2f933b12d5b0c1b4dfa64b12b"
+          :extra-deps {thheller/shadow-cljs {:mvn/version "2.20.7"}
+                       io.github.nextjournal/clerk {:git/sha "405925294d2dc434048b0c5f481120a41ddac47d"
                                                     #_#_:mvn/version "0.6.387"}
-
-                       ;; for static build
-                       applied-science/js-interop {:mvn/version "0.3.3"}
-                       org.babashka/sci {:mvn/version "0.3.2"}
-                       reagent/reagent {:mvn/version "1.1.0"}
-                       io.github.babashka/sci-configs {:git/sha "fd6a3332f358e56b96b5a791f75f97573e018580"}
-                       io.github.nextjournal/viewers {:git/sha "d88a9abd1f2bfd28ff2d3983407a9319c6f04501"
-                                                      :exclusions [io.github.nextjournal/markdown]}
+                       ;; for static build, copied from :sci alias of clerk
+                       org.babashka/sci {:git/url "https://github.com/babashka/sci"
+                                         :git/sha "a766b73f668e8ba59855ce229fad1aee08038922"}
+                       reagent/reagent {:mvn/version "1.1.1"}
+                       io.github.babashka/sci.configs {:git/sha "fcd367c6a6115c5c4e41f3a08ee5a8d5b3387a18"}
+                       io.github.nextjournal/viewers {:git/sha "1aaedea7709611cbb393add4c85c7a2dd551260e"}
                        metosin/reitit-frontend {:mvn/version "0.5.15"}}}}}
