@@ -1,14 +1,14 @@
 {:deps true
- :dev-http {8765 "public"}
+ :dev-http {8765 {:root "public"}}
  :builds
  {:clerk
   {:target :browser
-   :modules {:main {:entries [nextjournal.clerk.static-app
-                              nextjournal.devcards.main
-                              nextjournal.viewer.notebook
-                              nextjournal.clerk.sci-viewer
+   :modules {:clerk {:entries [nextjournal.clerk.static-app
+                               nextjournal.devcards.main
+                               nextjournal.viewer.notebook
+                               nextjournal.clerk.render
 
-                              inside-out.notebook]}}
+                               inside-out.notebook]}}
    :output-dir "public/js"
    :asset-path "/js"
    }}}

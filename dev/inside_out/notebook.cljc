@@ -523,5 +523,32 @@
 ;;
 ;; Thanks to NextJournal for supporting this work and allowing it to be open-sourced.
 
+;; # More examples
 
+;; a form with conditional
+(cljs
+ (with-form [!form (merge {:type (?type :init :link)}
+                          (case ?type
+                            :image {:src (?image-src :label "Image url")}
+                            :link {:href (?link-href :label "Link")}))
+
+             :validators {?type #{:image :link}
+                          ?image-src (fn [v _]
+                                       (when (and v (not (re-find (re-pattern "(\\.png|\\.jpe?g|\\.gif)$") v)))
+                                         {:type :invalid
+                                          :content "Sorry, only png, jpg and gif images are allowed."}))
+                          ?link-href (fn [v _]
+                                       (when-not (re-find (re-pattern "^https://") v)
+                                         "Links must be secure and begin with https://"))
+                          :required [?type]}]
+   [:div
+    [:p (str "Type: " @?type)]
+    (case @?type
+      :image [managed-text-input ?image-src]
+      :link [managed-text-input ?link-href])
+    [:div
+
+     (map ui/view-message
+          (forms/visible-messages !form))
+     [:button.bg-gray-200.hover:bg-gray-300.p-2.rounded {:on-click #(swap! ?type {:image :link :link :image})} "Toggle Type"]]]))
 
