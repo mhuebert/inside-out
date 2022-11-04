@@ -1,32 +1,36 @@
 (ns user
   (:require [nextjournal.clerk :as clerk]
             [nextjournal.clerk.config :as config]
-            [inside-out.clerk-ui :as io-clerk]
             nextjournal.clerk.viewer
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [nextjournal.clerk.dev-launcher :as launcher]))
+
+(swap! config/!resource->url merge {"/js/viewer.js" "/js/viewer.js"})
 
 (defn start []
-  (io-clerk/setup-viewers!)
-  (swap! config/!resource->url merge {"/js/viewer.js" "http://localhost:8765/js/main.js"})
-  (clerk/serve! {:browse? true
-                 :watch-paths ["dev"]
-                 :show-filter-fn #(str/includes? % "notebooks")})
+  (launcher/start {:browse? true
+                   :watch-paths ["dev"]
+                   :show-filter-fn #(str/includes? % "notebooks")
+                   :extra-namespaces '[inside-out.sci-config]})
   (Thread/sleep 500)
-  (clerk/show! "dev/inside_out/notebook.cljc"))
+  (clerk/show! "dev/inside_out/notebook.clj"))
 
 (defn publish! [_]
-  (io-clerk/setup-viewers!)
-  (swap! config/!resource->url merge {"/js/viewer.js" "/js/main.js"})
-  (clerk/build-static-app! {:paths ["dev/inside_out/notebook.cljc"]
+  (clerk/build-static-app! {:paths ["dev/inside_out/notebook.clj"]
                             :bundle? false
                             :browse? false
                             :out-path "public"}))
 
 (comment
 
- (start)
 
- (clerk/serve! {:browse? true})
+ (do
+   (clerk/clear-cache!)
+   (shadow.cljs.devtools.api/stop-worker :viewer)
+   (start))
 
+ (do (clerk/clear-cache!)
+     (clerk/show! "dev/inside_out/test_notebook.clj"))
 
- (publish!))
+ (publish!)
+ )

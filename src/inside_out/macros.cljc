@@ -3,7 +3,8 @@
   (:require [clojure.walk :as walk]
             [clojure.zip :as z]
             [inside-out.util :as util]
-            [clojure.string :as str]))
+            [clojure.string :as str])
+  #?(:cljs (:require-macros inside-out.macros)))
 
 (defn replace-toplevel [pmap forms]
   (map (fn [x]
@@ -87,8 +88,8 @@
    seq
    (fn make-node [node children]
      (cond (map? node) (with-meta (into (empty node) children) (clojure.core/meta node))
-           (map-entry? node) (clojure.lang.MapEntry. (first children)
-                                                     (second children))
+           (map-entry? node) #?(:clj (clojure.lang.MapEntry. (first children) (second children))
+                                :cljs (cljs.core/MapEntry. (first children) (second children) nil))
            (vector? node) (with-meta (vec children) (clojure.core/meta node))
            (set? node) (with-meta (set children) (clojure.core/meta node))
            :else children))
@@ -279,13 +280,19 @@
                                    `(get ~root-sym '~sym)])))]
       ~@body)))
 
-(defmacro form [expr & {:as options}]
+(defn form* [_ _ expr options]
   (let [{:form/keys [fields compute meta]} (analyze-form expr options)]
     `(~'inside-out.forms/root ~compute ~(or meta {}) ~(vec (vals fields)))))
 
+(defmacro form [expr & {:as options}]
+  (form* nil nil expr options))
+
 ;; just for dev/notebook
-(defmacro timeout [ms & body]
+(defn timeout* [_ _ ms body]
   `(~'js/setTimeout (fn [] ~@body) ~ms))
+
+(defmacro timeout [ms & body]
+  (timeout* nil nil ms body))
 
 (defmacro swap-> [ref & forms]
   `(swap! ~ref (fn [val#] (-> val# ~@forms))))

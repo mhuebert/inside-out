@@ -7,13 +7,15 @@
             [clojure.string :as str]
             [inside-out.macros :as macros :refer [swap->]]
             [inside-out.util :as util :refer [assoc-in update-vals]]
-            [inside-out.promise :as p])
+            [promesa.core :as p])
   #?(:cljs (:require-macros [inside-out.forms])))
 
 ;; intended to be overridden via set! in cljs
 ;; intended use case is defining attribute-metadata globally
 ;; eg {:person/name {:label "Name"}}
 (def global-meta {})
+
+(defn set-global-meta! [m] (set! global-meta m))
 
 (declare closest)
 
@@ -477,15 +479,18 @@
            (valid? form))
      :clj (valid? form)))
 
+(defn try-submit+* [cljs? form submit-expr]
+  (if cljs?
+    `(watch-promise ~form
+       (p/let [res (valid?+ ~form)]
+         (when res ~submit-expr)))
+    `(do (touch! ~form)
+         (when (submittable? ~form) ~submit-expr))))
+
 (defmacro try-submit+
   "[async] Evaluates `submit-expr` if valid?+ returns true"
   [form submit-expr]
-  (if (:ns &env)
-    `(watch-promise ~form
-       (p/when (valid?+ ~form)
-         ~submit-expr))
-    `(do (touch! ~form)
-         (when (submittable? ~form) ~submit-expr))))
+  (try-submit+* (:ns &env) form submit-expr))
 
 (defmacro for-many [[as ?field] expr]
   (let [bindings (-> &env (find ?field) key meta :many/bindings)]

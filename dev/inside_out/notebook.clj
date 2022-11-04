@@ -27,8 +27,9 @@
 ;;             [inside-out.forms :as forms]))
 ;;```
 
-^#:nextjournal.clerk{:toc true :no-cache true :visibility :hide-ns}
+^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (ns inside-out.notebook
+  ^#:nextjournal.clerk{:toc true :no-cache true}
   (:require [inside-out.forms :as forms]
             [inside-out.reagent :refer [with-form]]
 
@@ -36,9 +37,16 @@
             [nextjournal.clerk :as-alias clerk]
 
             [clojure.string :as str]
-            [inside-out.clerk-ui :as ui :refer [cljs]]
-            [inside-out.promise :as p]))
+            [inside-out.ui :as ui]
+            [inside-out.clerk-cljs :refer [cljs cljs]]
+            [promesa.core :as p]))
 
+^{:nextjournal.clerk/visibility {:code :hide}}
+(cljs
+ (require '[inside-out.forms :refer [with-form]]
+          '[inside-out.ui :as ui]
+          '[clojure.string :as str]
+          '[promesa.core :as p]))
 ;; &nbsp;
 
 ;; ## Quick Example
@@ -181,7 +189,7 @@
 (cljs
 
  ;; inside your app's initialization code
- (set! inside-out.forms/global-meta {:person/name {:field/label "Your name"}})
+ (forms/set-global-meta! {:person/name {:field/label "Your name"}})
 
  [:pre (str inside-out.forms/global-meta)])
 
@@ -291,16 +299,16 @@
 
 ;; Async example
 
-#?(:cljs
-   (def check-domain
-     (-> (fn [value _]
-           (p/do (p/timeout 200)
-                 (if (even? (count value))
-                   (forms/message :info "Even: valid" :visibility :always)
-                   (forms/message :invalid "Odd: invalid" :visibility :always))))
-         (forms/validator :async true
-                          :debounce-ms 500
-                          :compute-when [:touched]))))
+(cljs
+ (def check-domain
+   (-> (fn [value _]
+         (p/do (p/delay 200)
+               (if (even? (count value))
+                 (forms/message :info "Even: valid" :visibility :always)
+                 (forms/message :invalid "Odd: invalid" :visibility :always))))
+       (forms/validator :async true
+                        :debounce-ms 500
+                        :compute-when [:touched]))))
 
 ;; forms/try-submit+ waits for any async validation to finish before continuing
 
@@ -322,22 +330,22 @@
 ;; A field is considered "touched" if a user has already interacted with it, or if its parent
 ;; form is touched (we "touch" a form itself when a user tries to submit it).
 
-#?(:cljs
-   (defn managed-text-input
-     "A text-input element that reads metadata from a ?field to display appropriately"
-     [?field attrs]
-     (let [messages (forms/visible-messages ?field)]
-       [:<>
-        [ui/input-text-element
-         (merge {:placeholder (:label ?field)
-                 :value @?field
-                 :on-change (forms/change-handler ?field)
-                 :on-blur (forms/blur-handler ?field)
-                 :on-focus (forms/focus-handler ?field)
-                 :class (when (:invalid (forms/types messages))
-                          "ring-2 ring-offset-2 ring-red-500 focus:ring-red-500")}
-                attrs)]
-        (into [:div.mt-3] (map ui/view-message) messages)])))
+(cljs
+ (defn managed-text-input
+   "A text-input element that reads metadata from a ?field to display appropriately"
+   [?field attrs]
+   (let [messages (forms/visible-messages ?field)]
+     [:<>
+      [ui/input-text-element
+       (merge {:placeholder (:label ?field)
+               :value @?field
+               :on-change (forms/change-handler ?field)
+               :on-blur (forms/blur-handler ?field)
+               :on-focus (forms/focus-handler ?field)
+               :class (when (:invalid (forms/types messages))
+                        "ring-2 ring-offset-2 ring-red-500 focus:ring-red-500")}
+              attrs)]
+      (into [:div.mt-3] (map ui/view-message) messages)])))
 
 ;; Example with validation. `?name` is not required, so the field is valid until
 ;; the user starts typing.
@@ -457,18 +465,17 @@
                                  (forms/visible-messages form))))
     [:button.bg-blue-500.text-white.p-3.m-3
      {:on-click #(forms/try-submit+ form
-                   (p/do (p/timeout 500)
+                   (p/do (p/delay 500)
                      {:info (str "Thanks, " name "!")}))}
      "Submit-Success"]
     [:button.bg-red-500.text-white.p-3.m-3
      {:on-click
       #(forms/try-submit+ form
          (p/do
-           (p/timeout 500)
+           (p/delay 500)
            {:error (str "Sorry " @?name ", an error occurred.")}))}
      "Submit-Error"]]))
 
-(macroexpand '(p/cond x 1 y 2))
 ;; `forms/clear!` resets a form to its initial state
 
 (cljs
@@ -508,12 +515,16 @@
 ;; This is probably most useful for REPL experiments or debugging. There is also a plain `form`
 ;; macro  which creates a form without bringing anything into scope.
 
-(def add (forms/form (+ ?a ?b)))
-(add '{?a 1 ?b 2})
+(cljs
+ (def add (forms/form (+ ?a ?b))))
+
+(cljs
+ (add '{?a 1 ?b 2}))
 
 ;; A form's fields can be reached by looking them up as symbols:
 
-('?a add)
+(cljs
+ ('?a add))
 
 ;;
 ;; # 🙏 NextJournal

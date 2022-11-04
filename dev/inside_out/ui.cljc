@@ -1,51 +1,7 @@
-(ns ^:nextjournal.clerk/no-cache inside-out.clerk-ui
-  (:require applied-science.js-interop
-            [clojure.string :as str]
-            [inside-out.forms :as forms]
+(ns inside-out.ui
+  (:require [inside-out.forms :as forms]
             [inside-out.util :refer [merge-props]]
-            [nextjournal.clerk.viewer :as viewer])
-  #?(:cljs (:require-macros inside-out.clerk-ui)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Clerk ClojureScript/Reagent viewer
-;;
-;; (for using compiled ClojureScript in a notebook)
-
-;; our API is a `hiccup` macro which will compile the contents as ClojureScript
-;; and render it using Reagent.
-(defmacro cljs
-  "Evaluate expressions in ClojureScript instead of Clojure. If the result is
-   a vector, it is passed to Reagent and interpreted as hiccup."
-  [& exprs]
-  (let [name (symbol (str "reagent-view-" (hash exprs)))]
-    (if (:ns &env)
-      ;; in ClojureScript, define a function
-      `(defn ~(with-meta name {:export true}) [] ~@exprs)
-      ;; in Clojure, return a map with a reference to the fully qualified sym
-      {:reagent/var `'~(symbol (str *ns*) (str name))})))
-
-(def reagent-viewer
-  (viewer/process-render-fn
-   {:pred #(and (map? %) (contains? % :reagent/var))
-    :fetch-fn (fn [_ x] x)
-    :render-fn '(fn render-var [{var :reagent/var}]
-                  (let [path (->> (str/split (str var) #"[./]")
-                                  (mapv munge))
-                        reagent-fn (applied-science.js-interop/get-in js/window path)
-                        wrapper (fn [f] (let [result (f)]
-                                          (if (vector? result)
-                                            result
-                                            (v/inspect result))))]
-                    (when reagent-fn
-                      (v/html [:div.my-1 [wrapper reagent-fn]]))))}))
-
-
-(defn setup-viewers! []
-  (swap! viewer/!viewers update :root #(into [reagent-viewer] %)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Form-specific UI stuff
-
+            [nextjournal.clerk.viewer :as viewer]))
 
 (def nonbreaking-space "the &nbsp; character (for taking up space when no messages are present)"
   \u00A0)
@@ -108,4 +64,3 @@
                       attrs)]
         (when (seq messages)
           (into [:div.mt-1] (map view-message) messages))])))
-

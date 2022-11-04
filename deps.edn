@@ -1,21 +1,18 @@
-{:deps {org.clojure/clojure {:mvn/version "1.11.0"}
-        org.clojure/clojurescript {:mvn/version "1.10.914"}
+{:deps {org.clojure/clojure {:mvn/version "1.11.1"}
+        org.clojure/clojurescript {:mvn/version "1.11.60"}
         rewrite-clj/rewrite-clj {:mvn/version "1.0.644-alpha"}
         applied-science/js-interop {:mvn/version "0.3.1"}
-        reagent/reagent {:mvn/version "1.1.0"}}
+        reagent/reagent {:mvn/version "1.1.0"}
+        funcool/promesa {:mvn/version "9.0.489"}}
  :aliases
- {:dev {:extra-paths ["dev"]
-        :extra-deps {thheller/shadow-cljs {:mvn/version "2.16.12"}}}
-  :clerk {:extra-paths ["dev"]
+ {:clerk {:extra-paths ["dev"]
           :extra-deps {
-                       io.github.nextjournal/clerk {:git/sha "49237971ccf850d2f933b12d5b0c1b4dfa64b12b"
-                                                    #_#_:mvn/version "0.6.387"}
-
-                       ;; for static build
-                       applied-science/js-interop {:mvn/version "0.3.3"}
-                       org.babashka/sci {:mvn/version "0.3.2"}
-                       reagent/reagent {:mvn/version "1.1.0"}
-                       io.github.babashka/sci-configs {:git/sha "fd6a3332f358e56b96b5a791f75f97573e018580"}
-                       io.github.nextjournal/viewers {:git/sha "d88a9abd1f2bfd28ff2d3983407a9319c6f04501"
-                                                      :exclusions [io.github.nextjournal/markdown]}
-                       metosin/reitit-frontend {:mvn/version "0.5.15"}}}}}
+                       io.github.nextjournal/clerk:viewer
+                       {:local/root "../clerk/viewer"
+                        #_#_#_#_:git/url "https://github.com/nextjournal/clerk.git"
+                                :deps/root "dev"}
+                       io.github.nextjournal/clerk
+                       {:local/root "../clerk"
+                        #_#_:git/sha "49237971ccf850d2f933b12d5b0c1b4dfa64b12b"
+                        #_#_:mvn/version "0.6.387"}
+                       }}}}
