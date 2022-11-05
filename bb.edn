@@ -10,6 +10,7 @@
                  (->> (spit file))))
          publish (do
                    (shell "yarn")
+                   (shell "yarn global add tailwindcss")
                    (shell "clojure -X:clerk user/publish!")
                    (shell "touch public/build/CNAME")
                    (run 'sha)
