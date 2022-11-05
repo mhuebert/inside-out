@@ -21,7 +21,7 @@
 (defn publish! [& _]
   (swap! config/!resource->url merge {"/js/viewer.js" "/js/viewer.js"})
   (let [opts {:index "dev/inside_out/notebook.clj"
-              :compile-css true
+              ;:compile-css true
               :bundle? false
               :out-path "public/build"
               :extra-namespaces '[inside-out.sci-config]}]
@@ -42,6 +42,7 @@
    (some-> @!server future-cancel)
    (reset! !server
            (future (sh "python" "-m" "SimpleHTTPServer" "7999" :dir "public/build"))))
+
 
 
 
