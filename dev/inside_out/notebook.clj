@@ -453,8 +453,7 @@
                    :accepted-terms ?accepted}
              :form/validators [(fn [{:keys [accepted-terms]} _]
                                  (when-not accepted-terms
-                                   {:type :invalid
-                                    :content "Must accept terms"}))]]
+                                   "Must accept terms"))]]
    [:div
     [ui/input-text ?name]
     [:label.flex.flex-row.items-center [ui/input-checkbox ?accepted] "Accept terms?"]
@@ -466,14 +465,14 @@
     [:button.bg-blue-500.text-white.p-3.m-3
      {:on-click #(forms/try-submit+ form
                    (p/do (p/delay 500)
-                     {:info (str "Thanks, " name "!")}))}
+                         (forms/message :info (str "Thanks, " @?name "!"))))}
      "Submit-Success"]
     [:button.bg-red-500.text-white.p-3.m-3
      {:on-click
       #(forms/try-submit+ form
          (p/do
            (p/delay 500)
-           {:error (str "Sorry " @?name ", an error occurred.")}))}
+           (forms/message :error (str "Sorry " @?name ", an error occurred."))))}
      "Submit-Error"]]))
 
 ;; `forms/clear!` resets a form to its initial state
@@ -515,16 +514,13 @@
 ;; This is probably most useful for REPL experiments or debugging. There is also a plain `form`
 ;; macro  which creates a form without bringing anything into scope.
 
-(cljs
- (def add (forms/form (+ ?a ?b))))
+(def add (forms/form (+ ?a ?b) :init {?a 1 ?b 1}))
 
-(cljs
- (add '{?a 1 ?b 2}))
+(add '{?a 1 ?b 2})
 
 ;; A form's fields can be reached by looking them up as symbols:
 
-(cljs
- ('?a add))
+@('?a add)
 
 ;;
 ;; # 🙏 NextJournal

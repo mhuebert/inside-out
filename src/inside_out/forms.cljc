@@ -290,7 +290,9 @@
   ([default-type m]
    (cond (string? m) [{:content m :type default-type}]
          (map? m) [m]
-         (sequential? m) (into (empty m) (map (partial wrap-messages default-type)) m)
+         (sequential? m) (into (empty m)
+                               (mapcat (partial wrap-messages default-type))
+                               m)
          :else m)))
 
 (defn compute-messages
