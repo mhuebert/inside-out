@@ -3,14 +3,14 @@
          dev-local (do (shell "yarn")
                        (shell "shadow-cljs -A:clerk-local server"))
          sha (let [sha (clojure.string/trim (:out (shell {:out :string} "git rev-parse HEAD")))
-                   file "public/index.html"]
+                   file "public/build/index.html"]
                (->
                  (slurp file)
                  (clojure.string/replace "$GIT_SHA" sha)
                  (->> (spit file))))
-         publish (do (shell "yarn")
-                   (shell "yarn shadow-cljs -A:clerk release clerk")
-                   (shell "clojure -X:dev:clerk user/publish!")
+         publish (do
+                   (shell "yarn")
+                   (shell "clojure -X:clerk user/publish!")
                    (shell "touch public/build/CNAME")
                    (run 'sha)
                    (spit "public/build/CNAME" "inside-out.matt.is"))}}
