@@ -10,7 +10,10 @@
 ;; our API is a `hiccup` macro which will compile the contents as ClojureScript
 ;; and render it using Reagent.
 
-(defmacro cljs [& exprs]
+(defmacro cljs
+  "Evaluates `exprs` in a ClojureScript sci context. If result is a vector, it is
+   interpreted as hiccup (-> React)."
+  [& exprs]
   `(clerk/with-viewer
      {:render-fn '(fn [_# _#]
                     (nextjournal.clerk.render/render-reagent

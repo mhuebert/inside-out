@@ -1,36 +1,47 @@
 (ns user
-  (:require [nextjournal.clerk :as clerk]
+  (:require [clojure.string :as str]
+            [nextjournal.clerk :as clerk]
             [nextjournal.clerk.config :as config]
             nextjournal.clerk.viewer
-            [clojure.string :as str]
-            [nextjournal.clerk.dev-launcher :as launcher]))
+            [nextjournal.clerk.dev-launcher :as launcher]
+            [clojure.java.shell :refer [sh]]))
 
+;; one-time
 (swap! config/!resource->url merge {"/js/viewer.js" "/js/viewer.js"})
 
 (defn start []
   (launcher/start {:browse? true
+                   :out-path "public"
                    :watch-paths ["dev"]
                    :show-filter-fn #(str/includes? % "notebooks")
-                   :extra-namespaces '[inside-out.sci-config]})
-  (Thread/sleep 500)
-  (clerk/show! "dev/inside_out/notebook.clj"))
+                   :extra-namespaces '[inside-out.sci-config]}))
 
-(defn publish! [_]
-  (clerk/build-static-app! {:paths ["dev/inside_out/notebook.clj"]
-                            :bundle? false
-                            :browse? false
-                            :out-path "public"}))
+(defn publish! [& _]
+  (let [opts {:index "dev/inside_out/notebook.clj"
+              :bundle? false
+              :out-path "public/build"
+              :extra-namespaces '[inside-out.sci-config]}]
+    (clerk/build! opts)
+    (launcher/release opts {})
+    nil))
 
 (comment
 
-
- (do
-   (clerk/clear-cache!)
-   (shadow.cljs.devtools.api/stop-worker :viewer)
-   (start))
-
- (do (clerk/clear-cache!)
-     (clerk/show! "dev/inside_out/test_notebook.clj"))
+ (do (shadow.cljs.devtools.api/stop-worker :viewer)
+     (start))
 
  (publish!)
+
+ (do
+   ;; start a dev server on port 7999
+   (defonce !server (atom nil))
+   (some-> @!server future-cancel)
+   (reset! !server
+           (future (sh "python" "-m" "SimpleHTTPServer" "7999" :dir "public/build"))))
+
+
+
+ (clerk/clear-cache!)
+
+
  )

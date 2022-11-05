@@ -6,7 +6,7 @@
             [inside-out.forms]
             [inside-out.macros :as macros]
             [inside-out.reagent :as reagent]
-            [inside-out.promesa :as promesa.sci]))
+            [sci.configs.funcool.promesa :as promesa.sci]))
 
 (defn ^:macro with-form [&form &env bindings & body]
   (macros/with-form* 'reagent.core/with-let
