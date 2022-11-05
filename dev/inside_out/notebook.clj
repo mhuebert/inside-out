@@ -12,6 +12,7 @@
             [inside-out.ui :as ui]
             [inside-out.clerk-cljs :refer [cljs cljs]]
             [promesa.core :as p])
+  (:require [clojure.string :as str])
   (:require [clojure.string :as str]))
 
 ;; # Inside-Out: a Clojure forms library
@@ -549,15 +550,14 @@
                             :image-url {:image-url ?image-url}))
              :required [?type]
              :validators {?type #{:text :image-url}
-                          ?text string?
-                          ?image-url (forms/is #(str/starts-with? % "https://")
-                                               "Must be a secure URL beginning with https://")}
-             :form/validators (fn [_ {:syms [?type ?text ?image-url]}]
-                                ;; check for presence of conditionally-required fields here
-                                (case @?type
-                                  :text (when-not @?text "Text is required")
-                                  :image-url (when-not @?image-url "Image url is required")
-                                  nil))]
+                          ?text (fn [v {:syms [?type]}]
+                                  (when (and (= @?type :text)
+                                             (not (string? v)))
+                                    "Must be a string"))
+                          ?image-url (fn [v {:syms [?type]}]
+                                       (when (and (= @?type :image-url)
+                                                  (not (some-> v (str/starts-with? "https://"))))
+                                         "Must be a secure URL beginning with https://"))}]
    [:div.flex.flex-col.gap-2.w-64
     (str "type: " @?type)
     [:button.p-1.bg-blue-700.text-white.rounded.mb-1
@@ -565,10 +565,14 @@
                                :image-url :text})}
      "Toggle type!"]
     (case @?type
-      :text [managed-text-input ?text]
-      :image-url [managed-text-input ?image-url])
+      :text [:input {:placeholder "Text"
+                     :on-change #(reset! ?text (j/get-in % [:target :value]))
+                     :value @?text}]
+      :image-url [:input {:placeholder "Image URl"
+                          :on-change #(reset! ?image-url (j/get-in % [:target :value]))
+                          :value @?image-url}])
 
     ;; show all messages for the form
-    (->> (forms/messages !form)
+    (->> (forms/messages !form :deep true)
          (map ui/view-message)
          (into [:<>]))]))
