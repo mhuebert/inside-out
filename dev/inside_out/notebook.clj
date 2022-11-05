@@ -11,7 +11,8 @@
             [clojure.string :as str]
             [inside-out.ui :as ui]
             [inside-out.clerk-cljs :refer [cljs cljs]]
-            [promesa.core :as p]))
+            [promesa.core :as p])
+  (:require [clojure.string :as str]))
 
 ;; # Inside-Out: a Clojure forms library
 ;;
@@ -118,7 +119,7 @@
 (cljs
  (with-form [cars (take ?number (repeat "🚙"))
              :init {?number 3}]
-   [:div
+            [:div
     [:input {:type "range" :min "1" :max "10"
              :value @?number
              :on-change (fn [e] (->> e .-target .-value js/parseInt (reset! ?number)))}]
@@ -549,10 +550,10 @@
              :required [?type]
              :validators {?type #{:text :image-url}
                           ?text string?
-                          ?image-url (fn [s _]
-                                       (when (and s (not (str/starts-with? s "https://")))
-                                         "Must be a secure URL beginning with https://"))}
+                          ?image-url (forms/is #(str/starts-with? % "https://")
+                                               "Must be a secure URL beginning with https://")}
              :form/validators (fn [_ {:syms [?type ?text ?image-url]}]
+                                ;; check for presence of conditionally-required fields here
                                 (case @?type
                                   :text (when-not @?text "Text is required")
                                   :image-url (when-not @?image-url "Image url is required")
@@ -560,12 +561,14 @@
    [:div.flex.flex-col.gap-2.w-64
     (str "type: " @?type)
     [:button.p-1.bg-blue-700.text-white.rounded.mb-1
-     {:on-click (fn []
-                  (swap! ?type {:text :image-url :image-url :text}))}
+     {:on-click #(swap! ?type {:text :image-url
+                               :image-url :text})}
      "Toggle type!"]
     (case @?type
       :text [managed-text-input ?text]
       :image-url [managed-text-input ?image-url])
+
+    ;; show all messages for the form
     (->> (forms/messages !form)
          (map ui/view-message)
          (into [:<>]))]))
