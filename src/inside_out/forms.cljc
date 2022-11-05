@@ -47,6 +47,15 @@
     IReset
     (-reset! [o new-value]
       (reset! !state new-value))
+    #?@(:cljs [ISwap])
+    (-swap! [o f]
+      (swap! !state f))
+    (-swap! [o f a]
+      (swap! !state f a))
+    (-swap! [o f a b]
+      (swap! !state f a b))
+    (-swap! [o f a b xs]
+      (apply swap! !state f a b xs))
 
     IMeta
     (-meta [o] (merge metadata @!meta))
@@ -149,13 +158,27 @@
     (when (get-any compute-when field)
       (f value context))))
 
+(defn is [pred message]
+  (fn [v _]
+    (when (and v (not (pred v)))
+      message)))
+
+(defn in-set [set]
+  (is #(contains? set %)
+      #(str "Value must be one of " (str/join ", " set))))
+
 (defn init-validator [f field]
-  (if-let [options (some-> (meta f) ::validator)]
-    (let [{:keys [async compute-when]} options]
-      (cond-> f
-              async (wrap-async-validator! options field)
-              compute-when (wrap-compute-when options field)))
-    f))
+  (let [f (cond (set? f) (in-set f)
+                (identical? f string?) (is f "Must be a string")
+                (identical? f number?) (is f "Must be a number")
+                (identical? f boolean?) (is f "Must be a boolean")
+                :else f)]
+    (if-let [options (some-> (meta f) ::validator)]
+      (let [{:keys [async compute-when]} options]
+        (cond-> f
+                async (wrap-async-validator! options field)
+                compute-when (wrap-compute-when options field)))
+      f)))
 
 (declare compute-messages field-context)
 
@@ -187,6 +210,12 @@
                              :max-length max-length
                              :min-length min-length}))
 
+(defn ensure-vector [x]
+  (when x
+    (if (sequential? x)
+      (vec x)
+      [x])))
+
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]
   {:pre [sym]}
@@ -207,6 +236,7 @@
                        (atom* {})
                        (clojure.core/atom {}))
         validators (->> (:validators meta)
+                        ensure-vector
                         (concat (when (:required meta) [:required]))
                         (replace {:required (:required @!validators)})
                         (mapv #(init-validator % field)))

@@ -337,7 +337,11 @@
    (let [messages (forms/visible-messages ?field)]
      [:<>
       [ui/input-text-element
-       (merge {:placeholder (:label ?field)
+       (merge {:placeholder (or (:label ?field)
+                                (-> (:sym ?field)
+                                    str
+                                    (subs 1)
+                                    str/capitalize))
                :value @?field
                :on-change (forms/change-handler ?field)
                :on-blur (forms/blur-handler ?field)
@@ -532,3 +536,35 @@
 
 
 
+;; # More examples
+
+;; Conditionally validating fields
+
+(cljs
+ (with-form [!form (merge {:type (?type :init :text)}
+                          (case ?type
+                            :text {:content ?text}
+                            :image-url {:image-url ?image-url}))
+             :required [?type]
+             :validators {?type #{:text :image-url}
+                          ?text string?
+                          ?image-url (fn [s _]
+                                       (when (and s (not (str/starts-with? s "https://")))
+                                         "Must be a secure URL beginning with https://"))}
+             :form/validators (fn [_ {:syms [?type ?text ?image-url]}]
+                                (case @?type
+                                  :text (when-not @?text "Text is required")
+                                  :image-url (when-not @?image-url "Image url is required")
+                                  nil))]
+   [:div.flex.flex-col.gap-2.w-64
+    (str "type: " @?type)
+    [:button.p-1.bg-blue-700.text-white.rounded.mb-1
+     {:on-click (fn []
+                  (swap! ?type {:text :image-url :image-url :text}))}
+     "Toggle type!"]
+    (case @?type
+      :text [managed-text-input ?text]
+      :image-url [managed-text-input ?image-url])
+    (->> (forms/messages !form)
+         (map ui/view-message)
+         (into [:<>]))]))
