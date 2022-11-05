@@ -159,9 +159,11 @@
       (f value context))))
 
 (defn is [pred message]
-  (fn [v _]
+  (fn [v ctx]
     (when (and v (not (pred v)))
-      message)))
+      (if (fn? message)
+        (message v ctx)
+        message))))
 
 (defn in-set [set]
   (is #(contains? set %)

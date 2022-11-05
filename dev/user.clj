@@ -7,9 +7,11 @@
             [clojure.java.shell :refer [sh]]))
 
 ;; one-time
-(swap! config/!resource->url merge {"/js/viewer.js" "/js/viewer.js"})
+
 
 (defn start []
+  (swap! config/!resource->url merge {"/css/viewer.css" nil
+                                      "/js/viewer.js" "/js/viewer.js"})
   (launcher/start {:browse? true
                    :out-path "public"
                    :watch-paths ["dev"]
@@ -17,6 +19,7 @@
                    :extra-namespaces '[inside-out.sci-config]}))
 
 (defn publish! [& _]
+  (swap! config/!resource->url merge {"/js/viewer.js" "/js/viewer.js"})
   (let [opts {:index "dev/inside_out/notebook.clj"
               :compile-css true
               :bundle? false
