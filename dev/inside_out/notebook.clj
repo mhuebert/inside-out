@@ -29,7 +29,7 @@
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (ns inside-out.notebook
-  ^#:nextjournal.clerk{:toc true :no-cache true}
+  #:nextjournal.clerk{:toc true :no-cache true}
   (:require [inside-out.forms :as forms]
             [inside-out.reagent :refer [with-form]]
 
