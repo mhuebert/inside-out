@@ -7,7 +7,7 @@
  :aliases
  ;; for compiling clerk notebook
  {:clerk {:extra-paths ["dev"]
-          :extra-deps {io.github.nextjournal/clerk$viewer
+          :extra-deps {io.github.nextjournal/clerk.viewer
                        {:git/url "https://github.com/nextjournal/clerk.git"
                         :git/sha "3b8e275acf2ea0735355cfd409e318c4e2a1e5d5"
                         :deps/root "viewer"}
@@ -17,5 +17,5 @@
   ;; for working on Clerk
   :clerk-local {:extra-paths ["dev"]
                 :extra-deps
-                {io.github.nextjournal/clerk$viewer {:local/root "../clerk/viewer"}
+                {io.github.nextjournal/clerk.viewer {:local/root "../clerk/viewer"}
                  io.github.nextjournal/clerk {:local/root "../clerk"}}}}}
