@@ -9,6 +9,8 @@
                  (clojure.string/replace "$GIT_SHA" sha)
                  (->> (spit file))))
          release (shell "clojure -X:nextjournal/clerk")
+         release-local (shell "clojure -X:clerk-local:nextjournal/clerk")
+         serve-release (shell {:dir "public/build"} "python -m SimpleHTTPServer 7999")
          publish (do
                    (shell "yarn")
                    (shell "yarn global add tailwindcss")
