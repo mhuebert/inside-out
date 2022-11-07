@@ -1,5 +1,5 @@
 {:tasks {dev (do (shell "yarn")
-               (shell "shadow-cljs -A:clerk server"))
+               (shell "shadow-cljs -A:clerk-local server"))
          dev-local (do (shell "yarn")
                        (shell "shadow-cljs -A:clerk-local server"))
          sha (let [sha (clojure.string/trim (:out (shell {:out :string} "git rev-parse HEAD")))
@@ -11,7 +11,7 @@
          publish (do
                    (shell "yarn")
                    (shell "yarn global add tailwindcss")
-                   (shell "clojure -X:clerk user/publish!")
+                   (shell "clojure -X:nextjournal/clerk")
                    (shell "touch public/build/CNAME")
                    (run 'sha)
                    (spit "public/build/CNAME" "inside-out.matt.is"))}}

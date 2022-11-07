@@ -4,30 +4,26 @@
             [nextjournal.clerk.config :as config]
             nextjournal.clerk.viewer
             [nextjournal.clerk.dev-launcher :as launcher]
+            [nextjournal.clerk.viewer.builder :as builder]
             [clojure.java.shell :refer [sh]]))
 
 ;; one-time
 
 
 (defn start []
-  (swap! config/!resource->url merge {"/css/viewer.css" nil
-                                      "/js/viewer.js" "/js/viewer.js"})
   (launcher/start {:browse? true
                    :out-path "public"
                    :watch-paths ["dev"]
                    :show-filter-fn #(str/includes? % "notebooks")
-                   :extra-namespaces '[inside-out.sci-config]}))
+                   :extra-namespaces '[inside-out.sci-config]
+                   }))
 
 (defn publish! [& _]
-  (swap! config/!resource->url merge {"/js/viewer.js" "/js/viewer.js"})
-  (let [opts {:index "dev/inside_out/notebook.clj"
-              :compile-css true
-              :bundle? false
-              :out-path "public/build"
-              :extra-namespaces '[inside-out.sci-config]}]
-    (clerk/build! opts)
-    (launcher/release opts {})
-    nil))
+  (clerk/build! {:index "dev/inside_out/notebook.clj"
+                 :compile-css true
+                 :bundle? false
+                 :out-path "public/build"
+                 :extra-namespaces '[inside-out.sci-config]}))
 
 (comment
 
@@ -35,6 +31,9 @@
      (start))
 
  (publish!)
+
+ (require 'nextjournal.clerk.viewer.builder :reload)
+ (require 'nextjournal.clerk.builder :reload)
 
  (do
    ;; start a dev server on port 7999

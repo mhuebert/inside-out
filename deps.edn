@@ -6,13 +6,19 @@
         funcool/promesa {:mvn/version "9.0.489"}}
  :aliases
  ;; for compiling clerk notebook
- {:clerk {:extra-paths ["dev"]
-          :extra-deps {io.github.nextjournal/clerk.viewer
-                       {:git/url "https://github.com/nextjournal/clerk.git"
-                        :git/sha "df2d1702cb7b4e4eed7e463e68c7a4a1ca2eccdb"
-                        :deps/root "viewer"}
-                       io.github.nextjournal/clerk
-                       {:git/sha "df2d1702cb7b4e4eed7e463e68c7a4a1ca2eccdb"}}}
+ {:nextjournal/clerk {:extra-paths ["dev"]
+                      :extra-deps {io.github.nextjournal/clerk.viewer
+                                   {:git/url "https://github.com/nextjournal/clerk.git"
+                                    :git/sha "83ada57c934d32779c1a84362f5f2abdb9ce692b"
+                                    :deps/root "viewer"}
+                                   io.github.nextjournal/clerk
+                                   {:git/sha "83ada57c934d32779c1a84362f5f2abdb9ce692b"}}
+                      :exec-fn nextjournal.clerk/build!
+                      :exec-args {:index "dev/inside_out/notebook.clj"
+                                  :compile-css true
+                                  :bundle? false
+                                  :out-path "public/build"
+                                  :extra-namespaces [inside-out.sci-config]}}
 
   ;; for working on Clerk
   :clerk-local {:extra-paths ["dev"]
