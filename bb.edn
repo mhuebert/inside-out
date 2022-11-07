@@ -8,10 +8,11 @@
                  (slurp file)
                  (clojure.string/replace "$GIT_SHA" sha)
                  (->> (spit file))))
+         release (shell "clojure -X:nextjournal/clerk")
          publish (do
                    (shell "yarn")
                    (shell "yarn global add tailwindcss")
-                   (shell "clojure -X:nextjournal/clerk")
+                   (run 'release)
                    (shell "touch public/build/CNAME")
                    (run 'sha)
                    (spit "public/build/CNAME" "inside-out.matt.is"))}}
