@@ -9,7 +9,7 @@
  {:nextjournal/clerk {:extra-paths ["dev"]
                       :extra-deps {io.github.nextjournal/clerk.viewer
                                    {:git/url "https://github.com/nextjournal/clerk.git"
-                                    :git/sha "d7184b4f2dff0aa1ebdfe98da5e8aa25cfec431d"
+                                    :git/sha "bec2b1a9fdd719fd46022d8e52003c11e24b31c6"
                                     :deps/root "viewer"}}
                       :exec-fn nextjournal.clerk/build!
                       :exec-args {:index "dev/inside_out/notebook.clj"
