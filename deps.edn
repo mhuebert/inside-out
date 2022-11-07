@@ -9,10 +9,8 @@
  {:nextjournal/clerk {:extra-paths ["dev"]
                       :extra-deps {io.github.nextjournal/clerk.viewer
                                    {:git/url "https://github.com/nextjournal/clerk.git"
-                                    :git/sha "371644159a3f38adf7614cdcd4a1742821b510ec"
-                                    :deps/root "viewer"}
-                                   io.github.nextjournal/clerk
-                                   {:git/sha "371644159a3f38adf7614cdcd4a1742821b510ec"}}
+                                    :git/sha "add04767643169ca915e2456b39518eeb3a37c01"
+                                    :deps/root "viewer"}}
                       :exec-fn nextjournal.clerk/build!
                       :exec-args {:index "dev/inside_out/notebook.clj"
                                   :compile-css true
@@ -22,6 +20,5 @@
 
   ;; for working on Clerk
   :clerk-local {:extra-paths ["dev"]
-                :extra-deps
-                {io.github.nextjournal/clerk.viewer {:local/root "../clerk/viewer"}
-                 io.github.nextjournal/clerk {:local/root "../clerk"}}}}}
+                :extra-deps {io.github.nextjournal/clerk.viewer
+                             {:local/root "../clerk/viewer"}}}}}
