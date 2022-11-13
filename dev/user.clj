@@ -33,5 +33,11 @@
 
  (clerk/clear-cache!)
 
+ (clerk/build! {:index "dev/inside_out/notebook.clj"
+                :compile-css true
+                :bundle? false
+                :out-path "public/build"
+                :extra-namespaces '[inside-out.sci-config]})
+
 
  )

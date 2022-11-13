@@ -1,7 +1,8 @@
 
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (ns inside-out.notebook
-  #:nextjournal.clerk{:toc true :no-cache true}
+  {:nextjournal.clerk/toc true
+   :nextjournal.clerk/no-cache true}
   (:require [inside-out.forms :as forms]
             [inside-out.reagent :refer [with-form]]
 
@@ -10,10 +11,8 @@
 
             [clojure.string :as str]
             [inside-out.ui :as ui]
-            [inside-out.clerk-cljs :refer [cljs cljs]]
-            [promesa.core :as p])
-  (:require [clojure.string :as str])
-  (:require [clojure.string :as str]))
+            [inside-out.clerk-cljs :refer [cljs]]
+            [promesa.core :as p]))
 
 ;; # Inside-Out: a Clojure forms library
 ;;

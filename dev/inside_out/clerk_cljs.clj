@@ -15,12 +15,9 @@
    interpreted as hiccup (-> React)."
   [& exprs]
   `(clerk/with-viewer
-     {:render-fn '(fn [_# _#]
-                    (nextjournal.clerk.render/render-reagent
-                     [(fn []
-                        (let [result# (do ~@exprs)]
-                          (if (vector? result#)
-                            result#
-                            [nextjournal.clerk.render/inspect result#])))]))}
-     {}
+     '(fn [_# _#]
+        (let [result# (do ~@exprs)]
+          (if (vector? result#)
+            result#
+            [nextjournal.clerk.render/inspect result#])))
      nil))
