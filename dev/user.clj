@@ -2,18 +2,18 @@
   (:require [clojure.string :as str]
             [nextjournal.clerk :as clerk]
             nextjournal.clerk.viewer
-            [nextjournal.clerk.dev-launcher :as launcher]
+            [nextjournal.clerk.builder.cljs :as builder]
             [clojure.java.shell :refer [sh]]))
 
 ;; one-time
 
 
 (defn start []
-  (launcher/start {:browse? true
-                   :out-path "public"
-                   :watch-paths ["dev"]
-                   :show-filter-fn #(str/includes? % "notebooks")
-                   :extra-namespaces '[inside-out.sci-config]}))
+  (builder/start-watch {:browse? true
+                        :out-path "public"
+                        :watch-paths ["dev"]
+                        :show-filter-fn #(str/includes? % "notebooks")
+                        :extra-namespaces '[inside-out.sci-config]}))
 
 (comment
 
