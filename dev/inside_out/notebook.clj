@@ -68,7 +68,7 @@
 ;; Let's make this interactive with a text `:input`.
 
 (cljs
- (with-form [contact-info {:person/name ?name}]
+ (inside-out.forms/with-form [contact-info {:person/name ?name}]
    [:div
     [:input.border.p-3
      {:value @?name
@@ -117,14 +117,15 @@
 ;; Interactive example:
 
 (cljs
- (with-form [cars (take ?number (repeat "🚙"))
-             :init {?number 3}]
-            [:div
-    [:input {:type "range" :min "1" :max "10"
-             :value @?number
-             :on-change (fn [e] (->> e .-target .-value js/parseInt (reset! ?number)))}]
-    (str " " @?number " ")
-    (str/join @cars)]))
+  (inside-out.forms/with-form
+    [cars (take ?number (repeat "🚙"))
+     :init {?number 3}]
+    [:div
+     [:input {:type "range" :min "1" :max "10"
+              :value @?number
+              :on-change (fn [e] (->> e .-target .-value js/parseInt (reset! ?number)))}]
+     (str " " @?number " ")
+     (str/join @cars)]))
 
 ;; This is quite different from the common approach of giving each field a "path" or "cursor"
 ;; into an atom, which requires the shape of the form to be static.
@@ -198,7 +199,8 @@
 ;; Now it is available globally:
 
 (cljs
- (with-form [form [[:db/add 1 :person/name ?name]]]
+  (inside-out.forms/with-form
+    [form [[:db/add 1 :person/name ?name]]]
    (:field/label ?name)))
 
 ;; ## Validation
@@ -294,17 +296,18 @@
 ;;
 
 (cljs
- (with-form [form {:name ?name}
-             :validators {?name [(-> (fn [value _] (forms/message :info (str "Hello, " value)))
-                                     (forms/validator :compute-when [:focused]))]}]
-   [ui/input-text ?name]))
+  (inside-out.forms/with-form
+    [form {:name ?name}
+     :validators {?name [(-> (fn [value _] (forms/message :info (str "Hello, " value)))
+                             (forms/validator :compute-when [:focused]))]}]
+    [inside-out.ui/input-text ?name]))
 
 ;; Async example
 
 (cljs
  (def check-domain
    (-> (fn [value _]
-         (p/do (p/delay 200)
+         (promesa.core/do (promesa.core/delay 200)
                (if (even? (count value))
                  (forms/message :info "Even: valid" :visibility :always)
                  (forms/message :invalid "Odd: invalid" :visibility :always))))
@@ -315,13 +318,14 @@
 ;; forms/try-submit+ waits for any async validation to finish before continuing
 
 (cljs
- (with-form [form {:domain (?domain :validators [check-domain])}]
-   [:form {:on-submit (fn [^js e]
-                        (.preventDefault e)
-                        (forms/try-submit+ form (prn :submitting @form)))}
-    [ui/input-text ?domain]
-    [:pre (str (forms/messages ?domain))]
-    [:pre "submittable? " (str (forms/submittable? form))]]))
+  (inside-out.forms/with-form
+    [form {:domain (?domain :validators [user/check-domain])}]
+    [:form {:on-submit (fn [^js e]
+                         (.preventDefault e)
+                         (forms/try-submit+ form (prn :submitting @form)))}
+     [inside-out.ui/input-text ?domain]
+     [:pre (str (forms/messages ?domain))]
+     [:pre "submittable? " (str (forms/submittable? form))]]))
 
 
 ;; ## Components
@@ -338,7 +342,7 @@
    [?field attrs]
    (let [messages (forms/visible-messages ?field)]
      [:<>
-      [ui/input-text-element
+      [inside-out.ui/input-text-element
        (merge {:placeholder (or (:label ?field)
                                 (-> (:sym ?field)
                                     str
@@ -351,20 +355,21 @@
                :class (when (:invalid (forms/types messages))
                         "ring-2 ring-offset-2 ring-red-500 focus:ring-red-500")}
               attrs)]
-      (into [:div.mt-3] (map ui/view-message) messages)])))
+      (into [:div.mt-3] (map inside-out.ui/view-message) messages)])))
 
 ;; Example with validation. `?name` is not required, so the field is valid until
 ;; the user starts typing.
 
 (cljs
- (with-form [form [[:db/add 1 :person/name ?name]]
-             :meta {?name {:label "Your full name"
-                           :validators [(forms/min-length 3)]}}]
+  (inside-out.forms/with-form
+    [form [[:db/add 1 :person/name ?name]]
+     :meta {?name {:label "Your full name"
+                   :validators [(forms/min-length 3)]}}]
 
-   [:form
-    [managed-text-input ?name]
-    [:pre (str "valid? " (forms/valid? form))]
-    [:pre (str @form)]]))
+    [:form
+     [user/managed-text-input ?name]
+     [:pre (str "valid? " (forms/valid? form))]
+     [:pre (str @form)]]))
 
 ;; ## Plural fields (subforms)
 
@@ -405,30 +410,31 @@
 ;; Interactive example:
 
 (cljs
- (with-form [form [[:db/add 1 :person/pets
-                    ;; define a plural field by adding a :many key to the field.
-                    ;; it should contain a "template" for each item in the list.
-                    (?pets :many {:pet/id ?id
-                                  :pet/name (?name :init "Fido")})]]]
+  (inside-out.forms/with-form
+    [form [[:db/add 1 :person/pets
+            ;; define a plural field by adding a :many key to the field.
+            ;; it should contain a "template" for each item in the list.
+            (?pets :many {:pet/id ?id
+                          :pet/name (?name :init "Fido")})]]]
 
-   [:div
-    [ui/show-code (str @form)]
+    [:div
+     [inside-out.ui/show-code (str @form)]
 
-    (doall
-     ;; call (seq ?pets) to get a list of fields, which can be destructured using :syms
-     ;; to get the child bindings.
-     (for [{:as ?pet :syms [?id ?name]} ?pets]
-       [:div.flex.items-center.my-2
-        {:key @?id}
-        [managed-text-input ?name {:placeholder "Name"}]
-        [:div.text-red-500.hover:underline.hover:cursor-pointer.mx-3.font-bold
-         ;; call forms/remove-many! to remove an item
-         {:on-click #(forms/remove-many! ?pet)} "X"]]))
+     (doall
+       ;; call (seq ?pets) to get a list of fields, which can be destructured using :syms
+       ;; to get the child bindings.
+       (for [{:as ?pet :syms [?id ?name]} ?pets]
+         [:div.flex.items-center.my-2
+          {:key @?id}
+          [managed-text-input ?name {:placeholder "Name"}]
+          [:div.text-red-500.hover:underline.hover:cursor-pointer.mx-3.font-bold
+           ;; call forms/remove-many! to remove an item
+           {:on-click #(forms/remove-many! ?pet)} "X"]]))
 
-    [:div.my-3.text-blue-500.hover:underline.hover:cursor-pointer
-     ;; to add an item, call form/add-many! with ?pets and a map of bindings,
-     ;; using quoted symbols for keys {'?field, value}
-     {:on-click #(forms/add-many! ?pets {'?id (rand-int 1000)})} "Add Pet"]]))
+     [:div.my-3.text-blue-500.hover:underline.hover:cursor-pointer
+      ;; to add an item, call form/add-many! with ?pets and a map of bindings,
+      ;; using quoted symbols for keys {'?field, value}
+      {:on-click #(forms/add-many! ?pets {'?id (rand-int 1000)})} "Add Pet"]]))
 
 ;; To specify metadata targeting the children of a plural field, use the :child-meta key:
 
@@ -455,51 +461,53 @@
 ;; The following example includes buttons that show how to handle a successful or failed response.
 
 (cljs
- (with-form [form {:name (?name :init "Sue")
-                   :accepted-terms ?accepted}
-             :form/validators [(fn [{:keys [accepted-terms]} _]
-                                 (when-not accepted-terms
-                                   "Must accept terms"))]]
-   [:div
-    [ui/input-text ?name]
-    [:label.flex.flex-row.items-center [ui/input-checkbox ?accepted] "Accept terms?"]
-    [:pre.text-xs.whitespace-pre-wrap (str @form)]
-    (into [:div]
-          (map ui/view-message (if (:loading? form)
-                                 (forms/wrap-messages "Loading...")
-                                 (forms/visible-messages form))))
-    [:button.bg-blue-500.text-white.p-3.m-3
-     {:on-click #(forms/try-submit+ form
-                   (p/do (p/delay 500)
-                         (forms/message :info (str "Thanks, " @?name "!"))))}
-     "Submit-Success"]
-    [:button.bg-red-500.text-white.p-3.m-3
-     {:on-click
-      #(forms/try-submit+ form
-         (p/do
-           (p/delay 500)
-           (forms/message :error (str "Sorry " @?name ", an error occurred."))))}
-     "Submit-Error"]]))
+  (inside-out.forms/with-form
+    [form {:name (?name :init "Sue")
+           :accepted-terms ?accepted}
+     :form/validators [(fn [{:keys [accepted-terms]} _]
+                         (when-not accepted-terms
+                           "Must accept terms"))]]
+    [:div
+     [inside-out.ui/input-text ?name]
+     [:label.flex.flex-row.items-center [inside-out.ui/input-checkbox ?accepted] "Accept terms?"]
+     [:pre.text-xs.whitespace-pre-wrap (str @form)]
+     (into [:div]
+           (map inside-out.ui/view-message (if (:loading? form)
+                                  (forms/wrap-messages "Loading...")
+                                  (forms/visible-messages form))))
+     [:button.bg-blue-500.text-white.p-3.m-3
+      {:on-click #(forms/try-submit+ form
+                                     (promesa.core/do (promesa.core/delay 500)
+                                           (forms/message :info (str "Thanks, " @?name "!"))))}
+      "Submit-Success"]
+     [:button.bg-red-500.text-white.p-3.m-3
+      {:on-click
+       #(forms/try-submit+ form
+                           (promesa.core/do
+                             (promesa.core/delay 500)
+                             (forms/message :error (str "Sorry " @?name ", an error occurred."))))}
+      "Submit-Error"]]))
 
 ;; `forms/clear!` resets a form to its initial state
 
 (cljs
- (with-form [form {:a ?a
-                   :b (?b :init "B")
-                   :c ?c
-                   :d (?d :many
-                          [?e (?f :init "F") ?nil]
-                          :init [{'?e "E"}])}
-             :meta {:a {:init "A"}
-                    ?c {:init "C"}
-                    ?e {:init "E"}}]
-   (str (= @form
-           (do (reset! ?a 1)
-               (reset! ?b 2)
-               (reset! ?c 3)
-               (forms/add-many! ?d '{?e 4 ?f 5 ?nil 6})
-               (forms/clear! form)
-               @form)))))
+  (inside-out.forms/with-form
+    [form {:a ?a
+           :b (?b :init "B")
+           :c ?c
+           :d (?d :many
+                  [?e (?f :init "F") ?nil]
+                  :init [{'?e "E"}])}
+     :meta {:a {:init "A"}
+            ?c {:init "C"}
+            ?e {:init "E"}}]
+    (str (= @form
+            (do (reset! ?a 1)
+                (reset! ?b 2)
+                (reset! ?c 3)
+                (forms/add-many! ?d '{?e 4 ?f 5 ?nil 6})
+                (forms/clear! form)
+                @form)))))
 
 ;; ## Reagent
 
@@ -543,35 +551,36 @@
 ;; Conditionally validating fields
 
 (cljs
- (with-form [!form (merge {:type (?type :init :text)}
-                          (case ?type
-                            :text {:content ?text}
-                            :image-url {:image-url ?image-url}))
-             :required [?type]
-             :validators {?type #{:text :image-url}
-                          ?text (fn [v {:syms [?type]}]
-                                  (when (and (= @?type :text)
-                                             (not (string? v)))
-                                    "Must be a string"))
-                          ?image-url (fn [v {:syms [?type]}]
-                                       (when (and (= @?type :image-url)
-                                                  (not (some-> v (str/starts-with? "https://"))))
-                                         "Must be a secure URL beginning with https://"))}]
-   [:div.flex.flex-col.gap-2.w-64
-    (str "type: " @?type)
-    [:button.p-1.bg-blue-700.text-white.rounded.mb-1
-     {:on-click #(swap! ?type {:text :image-url
-                               :image-url :text})}
-     "Toggle type!"]
-    (case @?type
-      :text [:input {:placeholder "Text"
-                     :on-change #(reset! ?text (j/get-in % [:target :value]))
-                     :value @?text}]
-      :image-url [:input {:placeholder "Image URl"
-                          :on-change #(reset! ?image-url (j/get-in % [:target :value]))
-                          :value @?image-url}])
+  (inside-out.forms/with-form
+    [!form (merge {:type (?type :init :text)}
+                  (case ?type
+                    :text {:content ?text}
+                    :image-url {:image-url ?image-url}))
+     :required [?type]
+     :validators {?type #{:text :image-url}
+                  ?text (fn [v {:syms [?type]}]
+                          (when (and (= @?type :text)
+                                     (not (string? v)))
+                            "Must be a string"))
+                  ?image-url (fn [v {:syms [?type]}]
+                               (when (and (= @?type :image-url)
+                                          (not (some-> v (str/starts-with? "https://"))))
+                                 "Must be a secure URL beginning with https://"))}]
+    [:div.flex.flex-col.gap-2.w-64
+     (str "type: " @?type)
+     [:button.p-1.bg-blue-700.text-white.rounded.mb-1
+      {:on-click #(swap! ?type {:text :image-url
+                                :image-url :text})}
+      "Toggle type!"]
+     (case @?type
+       :text [:input {:placeholder "Text"
+                      :on-change #(reset! ?text (j/get-in % [:target :value]))
+                      :value @?text}]
+       :image-url [:input {:placeholder "Image URl"
+                           :on-change #(reset! ?image-url (j/get-in % [:target :value]))
+                           :value @?image-url}])
 
-    ;; show all messages for the form
-    (->> (forms/messages !form :deep true)
-         (map ui/view-message)
-         (into [:<>]))]))
+     ;; show all messages for the form
+     (->> (forms/messages !form :deep true)
+          (map inside-out.ui/view-message)
+          (into [:<>]))]))
