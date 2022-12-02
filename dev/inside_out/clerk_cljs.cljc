@@ -16,12 +16,10 @@
 
 
 (defn stable-form
-
   [form]
   (let [!counter (atom 0)
         !syms (atom {})]
     (walk/postwalk (fn [x]
-
                      (cond #?(:cljs (regexp? x)
                               :clj (instance? java.util.regex.Pattern x))
                            (str "regexp-" (swap! !counter inc))
@@ -40,19 +38,27 @@
   (let [fn-name (str "cljs_fn_" (hash (stable-form exprs)))]
     (if (:ns &env)
       ;; in ClojureScript, define a function
-      `(j/assoc! ~'js/window ~fn-name (fn [] ~@exprs))
+      `(let [f# (fn [] ~@exprs)]
+         (j/update! ~'js/window ~fn-name (fn [x#]
+                                           (cond (not x#) (reagent.core/atom {:f f#})
+                                                 (:loading? @x#) (doto x# (reset! {:f f#}))
+                                                 :else x#))))
       ;; in Clojure, return a map with a reference to the fully qualified sym
       `(clerk/with-viewer
          {:transform-fn nextjournal.clerk/mark-presented
           :render-fn '(fn render-var [_]
-                        (if-let [cljs-fn (j/get js/window ~fn-name)]
-                          (let [result (try (cljs-fn)
-                                            (catch js/Error e
-                                              (js/console.error e)
-                                              [nextjournal.clerk.render/error-view e]))]
-                            (if (and (vector? result)
-                                     (not (:vector (meta result))))
-                              [:div.my-1 result]
-                              [nextjournal.clerk.render/inspect result]))
-                          "cljs fn not defined (try reloading)"))}
+                        (applied-science.js-interop/update! js/window ~fn-name
+                                                            (fn [x]
+                                                              (or x (reagent.core/atom {:loading? true}))))
+                        (let [res @(j/get js/window ~fn-name)]
+                          (if (:loading? res)
+                            [:div.my-2 {:style {:color "rgba(0,0,0,0.5)"}} "Loading..."]
+                            (let [result (try ((:f res))
+                                              (catch js/Error e
+                                                (js/console.error e)
+                                                [nextjournal.clerk.render/error-view e]))]
+                              (if (and (vector? result)
+                                       (not (:vector (meta result))))
+                                [:div.my-1 result]
+                                [nextjournal.clerk.render/inspect result])))))}
          nil))))
