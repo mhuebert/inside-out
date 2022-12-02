@@ -2,8 +2,31 @@
 (ns inside-out.test-notebook
   (:require [nextjournal.clerk :as-alias clerk]
             [clojure.string :as str]
-            [inside-out.clerk-cljs :refer [cljs]]))
+            [inside-out.clerk-cljs :refer [cljs]]
+            [inside-out.forms :as forms]
+            [inside-out.reagent :refer [with-form]]))
 
-(cljs (str/join "," [1, 2, 3, 4]))
-(cljs ^:vector  [1 2 3 4])
-(cljs (map inc (range 100)))
+(cljs
+ (with-form [foo {:bar ?bar}]
+   [:<>
+    [:span (str @foo)]
+    [:span (forms/visible-messages foo)]
+    [:input {:on-change #(reset! ?bar (.. % -target -value))
+             :placeholder "Type here..."
+             :type :text
+             :value @?bar}]
+    [:input {:type :button
+             :value "clear"
+             :on-click #(forms/clear! foo)}]])
+ )
+
+#_(with-form [foo {:bar ?bar}]
+    [:div
+     [:span (str @foo)]
+     [:span (str (forms/visible-messages foo))]
+     [:input {:on-change #(reset! ?bar (.. % -target -value))
+              :type :text
+              :value @?bar}]
+     [:input {:type :button
+              :value "clear"
+              :on-click #(forms/clear! foo)}]])

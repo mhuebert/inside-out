@@ -218,6 +218,20 @@
       (vec x)
       [x])))
 
+(defn messages-reaction [^Field field]
+  ;; a form's messages are computed in a reaction
+  ;; (to only do the work when dependent values change)
+  (let [metadata (.-metadata field)
+        validators (->> (:validators metadata)
+                        ensure-vector
+                        (concat (when (:required metadata) [:required]))
+                        (replace {:required (:required @!validators)})
+                        (mapv #(init-validator % field)))
+        messages-fn #(compute-messages @field validators (field-context field))]
+    #?(:cljs (ratom/make-reaction messages-fn)
+       :clj  (reify clojure.lang.IDeref
+               (deref [_] (messages-fn))))))
+
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]
   {:pre [sym]}
@@ -230,22 +244,14 @@
                             (into {}
                                   (map #(cond->> (% sym)
                                                  attribute (concat (% attribute))))))
-        meta (merge inherited-meta meta)
+        metadata (merge inherited-meta meta)
         field (->Field parent
                        compute
-                       (atom* (:init meta))
-                       meta
+                       (atom* (:init metadata))
+                       metadata
                        (atom* {})
-                       (clojure.core/atom {}))
-        validators (->> (:validators meta)
-                        ensure-vector
-                        (concat (when (:required meta) [:required]))
-                        (replace {:required (:required @!validators)})
-                        (mapv #(init-validator % field)))
-        messages-fn #(compute-messages @field validators (field-context field))]
-    (swap! (!meta field) assoc :!messages
-           #?(:cljs (ratom/make-reaction messages-fn)
-              :clj  (reify clojure.lang.IDeref (deref [_] (messages-fn)))))
+                       (clojure.core/atom {}))]
+    (swap! (!meta field) assoc :!messages (messages-reaction field))
     field))
 
 (declare make-binding!)
@@ -473,7 +479,7 @@
     (if (:many field)
       (init-many! field)
       (reset! field (:init field)))
-    (reset! (!meta field) {}))
+    (swap! (!meta field) select-keys [:!messages]))
   field)
 
 (comment

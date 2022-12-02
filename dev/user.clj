@@ -5,7 +5,10 @@
             [nextjournal.clerk.viewer]))
 
 (defn start []
-  (swap! config/!resource->url merge {"/js/viewer.js" "http://localhost:8765/js/main.js"})
+  (swap! config/!resource->url (fn [x]
+                                 (-> x
+                                     (assoc "/js/viewer.js" "http://localhost:8765/js/main.js")
+                                     (dissoc "/css/viewer.css"))))
   (clerk/serve! {:browse? true
                  :out-path "public"
                  :watch-paths ["dev"]
