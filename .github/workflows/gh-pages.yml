@@ -28,6 +28,8 @@ jobs:
         uses: just-sultanov/setup-babashka@v2
         with:
           version: '0.4.6'
+      - name: Install tailwind
+        run: yarn global add tailwindcss
       - name: Build static site
         run: bb publish
       - name: Deploy

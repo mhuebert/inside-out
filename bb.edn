@@ -12,6 +12,6 @@
          publish (do (shell "yarn")
                      (run 'release)
                      (shell "clojure -X:clerk user/publish!")
-                     (run 'sha)
                      (shell "touch public/build/CNAME")
-                     (spit "public/build/CNAME" "inside-out.matt.is"))}}
+                     (spit "public/build/CNAME" "inside-out.matt.is")
+                     (run 'sha))}}
