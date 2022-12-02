@@ -1,22 +1,19 @@
 {:deps {org.clojure/clojure {:mvn/version "1.11.1"}
         org.clojure/clojurescript {:mvn/version "1.11.60"}
-        rewrite-clj/rewrite-clj {:mvn/version "1.0.644-alpha"}
-        applied-science/js-interop {:mvn/version "0.3.1"}
-        reagent/reagent {:mvn/version "1.1.0"}
-        funcool/promesa {:mvn/version "9.0.489"}}
+        rewrite-clj/rewrite-clj {:mvn/version "1.1.45"}
+        applied-science/js-interop {:mvn/version "0.3.3"}
+        reagent/reagent {:mvn/version "1.1.1"}
+        funcool/promesa {:mvn/version "9.2.541"}
+        thheller/shadow-cljs {:mvn/version "2.20.13"}}
  :aliases
  ;; for compiling clerk notebook
- {:nextjournal/clerk {:extra-paths ["dev"]
-                      :extra-deps {io.github.nextjournal/clerk.viewer
-                                   {:git/url "https://github.com/nextjournal/clerk.git"
-                                    :git/sha "64f282d20711f98682e413bfe1ec98017e672536"
-                                    :deps/root "viewer"}}
-                      :exec-fn nextjournal.clerk/build!
-                      :exec-args {:index "dev/inside_out/notebook.clj"
-                                  :compile-css true
-                                  :bundle? false
-                                  :out-path "public/build"
-                                  :extra-namespaces [inside-out.sci-config]}}
+ {:clerk {:extra-paths ["dev"]
+          :extra-deps {io.github.nextjournal/clerk
+                       {:git/sha "ce767a6fa846cbc2ddb113956aa2fa0fe19dd157"}
+                       io.github.nextjournal/clerk.render
+                       {:git/url "https://github.com/nextjournal/clerk.git"
+                        :git/sha "ce767a6fa846cbc2ddb113956aa2fa0fe19dd157"
+                        :deps/root "render"}}}
 
   ;; for working on Clerk
   :clerk-local {:extra-paths ["dev"]

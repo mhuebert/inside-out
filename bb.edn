@@ -1,20 +1,17 @@
 {:tasks {dev (do (shell "yarn")
-               (shell "shadow-cljs -A:clerk-local server"))
+                 (shell "shadow-cljs -A:clerk watch clerk"))
          dev-local (do (shell "yarn")
                        (shell "shadow-cljs -A:clerk-local server"))
          sha (let [sha (clojure.string/trim (:out (shell {:out :string} "git rev-parse HEAD")))
-                   file "public/build/index.html"]
+                   file "public/index.html"]
                (->
                  (slurp file)
                  (clojure.string/replace "$GIT_SHA" sha)
                  (->> (spit file))))
-         release (shell "clojure -X:nextjournal/clerk")
-         release-local (shell "clojure -X:clerk-local:nextjournal/clerk")
-         serve-release (shell {:dir "public/build"} "python -m SimpleHTTPServer 7999")
-         publish (do
-                   (shell "yarn")
-                   (shell "yarn global add tailwindcss")
-                   (run 'release)
-                   (shell "touch public/build/CNAME")
-                   (run 'sha)
-                   (spit "public/build/CNAME" "inside-out.matt.is"))}}
+         release (shell "yarn shadow-cljs -A:clerk release clerk")
+         publish (do (shell "yarn")
+                     (run 'release)
+                     (shell "clojure -X:clerk user/publish!")
+                     (run 'sha)
+                     (shell "touch public/build/CNAME")
+                     (spit "public/build/CNAME" "inside-out.matt.is"))}}

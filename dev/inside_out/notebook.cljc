@@ -1,17 +1,14 @@
-
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (ns inside-out.notebook
   {:nextjournal.clerk/toc true
    :nextjournal.clerk/no-cache true}
-  (:require [inside-out.forms :as forms]
-            [inside-out.reagent :refer [with-form]]
-
-   ;; only for notebook purposes
-            [nextjournal.clerk :as-alias clerk]
-
+  (:require [applied-science.js-interop :as j]
             [clojure.string :as str]
-            [inside-out.ui :as ui]
             [inside-out.clerk-cljs :refer [cljs]]
+            [inside-out.forms :as forms]
+            [inside-out.reagent :refer [with-form]]
+            [inside-out.ui :as ui]
+            [nextjournal.clerk :as-alias clerk]
             [promesa.core :as p]))
 
 ;; # Inside-Out: a Clojure forms library
@@ -42,14 +39,6 @@
 ;;   (:require [inside-out.forms.reagent :refer [with-form]]
 ;;             [inside-out.forms :as forms]))
 ;;```
-
-^{:nextjournal.clerk/visibility {:code :hide}}
-(cljs
- (require '[inside-out.forms :refer [with-form]]
-          '[inside-out.ui :as ui]
-          '[clojure.string :as str]
-          '[promesa.core :as p]))
-;; &nbsp;
 
 ;; ## Quick Example
 
@@ -119,7 +108,7 @@
 (cljs
  (with-form [cars (take ?number (repeat "🚙"))
              :init {?number 3}]
-            [:div
+   [:div
     [:input {:type "range" :min "1" :max "10"
              :value @?number
              :on-change (fn [e] (->> e .-target .-value js/parseInt (reset! ?number)))}]
@@ -557,6 +546,7 @@
                                        (when (and (= @?type :image-url)
                                                   (not (some-> v (str/starts-with? "https://"))))
                                          "Must be a secure URL beginning with https://"))}]
+
    [:div.flex.flex-col.gap-2.w-64
     (str "type: " @?type)
     [:button.p-1.bg-blue-700.text-white.rounded.mb-1
@@ -565,10 +555,10 @@
      "Toggle type!"]
     (case @?type
       :text [:input {:placeholder "Text"
-                     :on-change #(reset! ?text (j/get-in % [:target :value]))
+                     :on-change (fn [^js e] (reset! ?text (.. e -target -value)))
                      :value @?text}]
       :image-url [:input {:placeholder "Image URl"
-                          :on-change #(reset! ?image-url (j/get-in % [:target :value]))
+                          :on-change (fn [^js e] (reset! ?image-url (.. e -target -value)))
                           :value @?image-url}])
 
     ;; show all messages for the form

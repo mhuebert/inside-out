@@ -454,7 +454,9 @@
                                       (cond messages (wrap-messages messages)
                                             error (wrap-messages :error error)
                                             invalid (wrap-messages :invalid invalid)
-                                            info (wrap-messages :info info))))
+                                            info (wrap-messages :info info)
+                                            :else (when (:content result)
+                                                    (wrap-messages result)))))
                        result)]
        (swap-> meta-atom
                (assoc :loading? true)
@@ -513,18 +515,15 @@
            (valid? form))
      :clj (valid? form)))
 
-(defn try-submit+* [cljs? form submit-expr]
-  (if cljs?
-    `(watch-promise ~form
-       (p/let [res (valid?+ ~form)]
-         (when res ~submit-expr)))
-    `(do (touch! ~form)
-         (when (submittable? ~form) ~submit-expr))))
-
 (defmacro try-submit+
   "[async] Evaluates `submit-expr` if valid?+ returns true"
   [form submit-expr]
-  (try-submit+* (:ns &env) form submit-expr))
+  (if (:ns &env)
+    `(watch-promise ~form
+       (-> (valid?+ ~form)
+           (.then (fn [res#] (when res# ~submit-expr)))))
+    `(do (touch! ~form)
+         (when (submittable? ~form) ~submit-expr))))
 
 (defmacro for-many [[as ?field] expr]
   (let [bindings (-> &env (find ?field) key meta :many/bindings)]
