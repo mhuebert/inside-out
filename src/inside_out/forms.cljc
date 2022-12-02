@@ -448,21 +448,24 @@
   "Wraps a promise to store :loading? and :remote-messages as reactive metadata on `form`.
 
 
-   If the promise resolves to a map containing :error, :invalid, :info, or :messages,
-   it will be set to the form's :remote-messages, which are included in `(messages form)`."
+   If the promise resolves to a message (a map containing :content), it will be set to the
+   form's :remote-messages, which are included in `(messages form)`."
   [form promise]
   #?(:cljs
      (let [meta-atom (!meta form)
-           complete! (fn [{:as result :keys [messages error invalid info]}]
+           complete! (fn [result]
                        (swap-> meta-atom
                                (dissoc :loading?)
                                (assoc :remote-messages
-                                      (cond messages (wrap-messages messages)
-                                            error (wrap-messages :error error)
-                                            invalid (wrap-messages :invalid invalid)
-                                            info (wrap-messages :info info)
-                                            :else (when (:content result)
-                                                    (wrap-messages result)))))
+                                      (cond
+                                        ;; preferred case: a single message, a map, is returned
+                                        (:content result) (wrap-messages result)
+
+                                        ;; legacy api
+                                        (:messages result) (wrap-messages (:messages result))
+                                        (:error result) (wrap-messages :error (:error result))
+                                        (:invalid result) (wrap-messages :invalid (:invalid result))
+                                        (:info result) (wrap-messages :info (:info result)))))
                        result)]
        (swap-> meta-atom
                (assoc :loading? true)
@@ -522,7 +525,8 @@
      :clj (valid? form)))
 
 (defmacro try-submit+
-  "[async] Evaluates `submit-expr` if valid?+ returns true"
+  "[async] Evaluates `submit-expr` if valid?+ returns true. The for's :remove-messages are set to
+   the return value of submit-expr (if it is a message) or nil."
   [form submit-expr]
   (if (:ns &env)
     `(watch-promise ~form
