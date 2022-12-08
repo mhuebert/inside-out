@@ -4,7 +4,7 @@
    :nextjournal.clerk/no-cache true}
   (:require [applied-science.js-interop :as j]
             [clojure.string :as str]
-            [inside-out.clerk-cljs :refer [cljs]]
+            [mhuebert.clerk-cljs :refer [cljs]]
             [inside-out.forms :as forms]
             [inside-out.reagent :refer [with-form]]
             [inside-out.ui :as ui]

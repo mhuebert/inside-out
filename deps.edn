@@ -8,7 +8,9 @@
  :aliases
  ;; for compiling clerk notebook
  {:clerk {:extra-paths ["dev"]
-          :extra-deps {io.github.nextjournal/clerk
+          :extra-deps {io.github.mhuebert/clerk-cljs
+                       {:git/sha "7570ae50c8c10111a3c555142d410a9df5f0927a"}
+                       io.github.nextjournal/clerk
                        {:git/sha "ce767a6fa846cbc2ddb113956aa2fa0fe19dd157"}
                        io.github.nextjournal/clerk.render
                        {:git/url "https://github.com/nextjournal/clerk.git"

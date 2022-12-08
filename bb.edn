@@ -11,7 +11,7 @@
          release (shell "yarn shadow-cljs -A:clerk release clerk")
          publish (do (shell "yarn")
                      (run 'release)
-                     (shell "clojure -X:clerk user/publish!")
+                     (shell "clojure -X:clerk dev/publish!")
                      (shell "touch public/build/CNAME")
                      (spit "public/build/CNAME" "inside-out.matt.is")
                      (run 'sha))}}

@@ -1,7 +1,7 @@
 ^{:nextjournal.clerk/visibility {:code :hide :result :hide}}
 (ns inside-out.test-notebook
   (:require [nextjournal.clerk :as-alias clerk]
-            [inside-out.clerk-cljs :refer [cljs]]
+            [mhuebert.clerk-cljs :refer [cljs]]
             [inside-out.forms :as forms]
             [inside-out.reagent :refer [with-form]]))
 

@@ -1,4 +1,4 @@
-(ns user
+(ns dev
   (:require [clojure.string :as str]
             [nextjournal.clerk :as clerk]
             [nextjournal.clerk.config :as config]
