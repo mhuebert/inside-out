@@ -34,7 +34,7 @@
 
 (defmacro cljs
   "Evaluate expressions in ClojureScript instead of Clojure.
-   Result is treated as hiccup if it is a vector (unless tagged with ^:vector),
+   Result is treated as hiccup if it is a vector (unless tagged with ^:inspect),
    otherwise passed to Clerk's `inspect`."
   [& exprs]
   (let [fn-name (stable-hash exprs)]
@@ -66,7 +66,7 @@
                                                 (js/console.error e)
                                                 [nextjournal.clerk.render/error-view e]))]
                               (if (and (vector? result)
-                                       (not (:vector (meta result))))
+                                       (not (:inspect (meta result))))
                                 [:div.my-1 result]
                                 [nextjournal.clerk.render/inspect result])))))}
          nil))))
