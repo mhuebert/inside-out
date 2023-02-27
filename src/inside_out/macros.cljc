@@ -1,9 +1,10 @@
 (ns inside-out.macros
   (:refer-clojure :exclude [meta])
-  (:require [clojure.walk :as walk]
+  (:require [clojure.string :as str]
             [clojure.zip :as z]
             [inside-out.util :as util]
-            [clojure.string :as str])
+            [re-db.hooks :as hooks]
+            [re-db.reactive :as r])
   #?(:cljs (:require-macros inside-out.macros)))
 
 (defn replace-toplevel [pmap forms]
@@ -268,26 +269,24 @@
 
 (defn with-form*
   "Implements with-form. Can pass :infer-meta function for additional metadata inference."
-  [let-form analyzer-options bindings body]
+  [_form _env analyzer-options bindings body]
   (let [[root-sym expr] bindings
         options (apply hash-map (drop 2 bindings))
         _ (assert (every? keyword? (keys options)) (str "Invalid options (not a keyword: " (remove keyword? (keys options)) ")"))
         {:form/keys [fields compute meta]} (analyze-form expr (merge analyzer-options options))]
-    `(~let-form [~root-sym (~'inside-out.forms/root ~compute ~meta ~(vec (vals fields)))
-                 ~@(->> fields
-                        (mapcat (fn [[sym {:keys [many]}]]
-                                  [(cond-> sym
-                                           many
-                                           (with-meta {:many/bindings (->> many :many/fields keys vec)}))
-                                   `(get ~root-sym '~sym)])))]
-      ~@body)))
+    `(r/reaction
+      (hooks/with-let [~root-sym (~'inside-out.forms/root ~compute ~meta ~(vec (vals fields)))
+                       ~@(->> fields
+                              (mapcat (fn [[sym {:keys [many]}]]
+                                        [(cond-> sym
+                                                 many
+                                                 (with-meta {:many/bindings (->> many :many/fields keys vec)}))
+                                         `(get ~root-sym '~sym)])))]
+                      ~@body))))
 
-(defn form* [_ _ expr options]
+(defn form* [_form _env expr options]
   (let [{:form/keys [fields compute meta]} (analyze-form expr options)]
     `(~'inside-out.forms/root ~compute ~(or meta {}) ~(vec (vals fields)))))
-
-(defmacro form [expr & {:as options}]
-  (form* nil nil expr options))
 
 ;; just for dev/notebook
 (defn timeout* [_ _ ms body]

@@ -5,11 +5,19 @@
   (:require [applied-science.js-interop :as j]
             [clojure.string :as str]
             [mhuebert.clerk-cljs :refer [cljs]]
-            [inside-out.forms :as forms]
-            [inside-out.reagent :refer [with-form]]
+            [inside-out.forms :as forms ]
+            [inside-out.reagent]
             [inside-out.ui :as ui]
             [nextjournal.clerk :as-alias clerk]
-            [promesa.core :as p]))
+            [promesa.core :as p])
+  #?(:cljs (:require-macros [inside-out.notebook :refer [reagent-form with-form]])))
+
+#?(:clj
+   ^{::clerk/visibility {:code :hide :result :hide}}
+   (defmacro with-form [& body] `(deref (forms/with-form ~@body))))
+#?(:clj
+   ^{::clerk/visibility {:code :hide :result :hide}}
+   (defmacro reagent-form [& body] `(inside-out.reagent/with-form ~@body)))
 
 ;; # Inside-Out: a Clojure forms library
 ;;
@@ -43,8 +51,8 @@
 ;; ## Quick Example
 
 (with-form [contact-info {:name ?name}]
-  (reset! ?name "Peter Rabbit")
-  @contact-info)
+   (reset! ?name "Peter Rabbit")
+   @contact-info)
 
 ;; What do we see here?
 ;;
@@ -57,7 +65,7 @@
 ;; Let's make this interactive with a text `:input`.
 
 (cljs
- (with-form [contact-info {:person/name ?name}]
+ (reagent-form [contact-info {:person/name ?name}]
    [:div
     [:input.border.p-3
      {:value @?name
@@ -106,8 +114,8 @@
 ;; Interactive example:
 
 (cljs
- (with-form [cars (take ?number (repeat "🚙"))
-             :init {?number 3}]
+ (reagent-form [cars (take ?number (repeat "🚙"))
+                :init {?number 3}]
    [:div
     [:input {:type "range" :min "1" :max "10"
              :value @?number
@@ -187,7 +195,7 @@
 ;; Now it is available globally:
 
 (cljs
- (with-form [form [[:db/add 1 :person/name ?name]]]
+ (reagent-form [form [[:db/add 1 :person/name ?name]]]
    (:field/label ?name)))
 
 ;; ## Validation
@@ -283,9 +291,9 @@
 ;;
 
 (cljs
- (with-form [form {:name ?name}
-             :validators {?name [(-> (fn [value _] (forms/message :info (str "Hello, " value)))
-                                     (forms/validator :compute-when [:focused]))]}]
+ (reagent-form [form {:name ?name}
+                :validators {?name [(-> (fn [value _] (forms/message :info (str "Hello, " value)))
+                                        (forms/validator :compute-when [:focused]))]}]
    [ui/input-text ?name]))
 
 ;; Async example
@@ -304,7 +312,7 @@
 ;; forms/try-submit+ waits for any async validation to finish before continuing
 
 (cljs
- (with-form [form {:domain (?domain :validators [check-domain])}]
+ (reagent-form [form {:domain (?domain :validators [check-domain])}]
    [:form {:on-submit (fn [^js e]
                         (.preventDefault e)
                         (forms/try-submit+ form (prn :submitting @form)))}
@@ -346,9 +354,9 @@
 ;; the user starts typing.
 
 (cljs
- (with-form [form [[:db/add 1 :person/name ?name]]
-             :meta {?name {:label "Your full name"
-                           :validators [(forms/min-length 3)]}}]
+ (reagent-form [form [[:db/add 1 :person/name ?name]]
+                :meta {?name {:label "Your full name"
+                              :validators [(forms/min-length 3)]}}]
 
    [:form
     [managed-text-input ?name]
@@ -394,11 +402,11 @@
 ;; Interactive example:
 
 (cljs
- (with-form [form [[:db/add 1 :person/pets
-                    ;; define a plural field by adding a :many key to the field.
-                    ;; it should contain a "template" for each item in the list.
-                    (?pets :many {:pet/id ?id
-                                  :pet/name (?name :init "Fido")})]]]
+ (reagent-form [form [[:db/add 1 :person/pets
+                       ;; define a plural field by adding a :many key to the field.
+                       ;; it should contain a "template" for each item in the list.
+                       (?pets :many {:pet/id ?id
+                                     :pet/name (?name :init "Fido")})]]]
 
    [:div
     [ui/show-code (str @form)]
@@ -444,11 +452,11 @@
 ;; The following example includes buttons that show how to handle a successful or failed response.
 
 (cljs
- (with-form [form {:name (?name :init "Sue")
-                   :accepted-terms ?accepted}
-             :form/validators [(fn [{:keys [accepted-terms]} _]
-                                 (when-not accepted-terms
-                                   "Must accept terms"))]]
+ (reagent-form [form {:name (?name :init "Sue")
+                      :accepted-terms ?accepted}
+                :form/validators [(fn [{:keys [accepted-terms]} _]
+                                    (when-not accepted-terms
+                                      "Must accept terms"))]]
    [:div
     [ui/input-text ?name]
     [:label.flex.flex-row.items-center [ui/input-checkbox ?accepted] "Accept terms?"]
@@ -473,15 +481,15 @@
 ;; `forms/clear!` resets a form to its initial state
 
 (cljs
- (with-form [form {:a ?a
-                   :b (?b :init "B")
-                   :c ?c
-                   :d (?d :many
-                          [?e (?f :init "F") ?nil]
-                          :init [{'?e "E"}])}
-             :meta {:a {:init "A"}
-                    ?c {:init "C"}
-                    ?e {:init "E"}}]
+ (reagent-form [form {:a ?a
+                      :b (?b :init "B")
+                      :c ?c
+                      :d (?d :many
+                             [?e (?f :init "F") ?nil]
+                             :init [{'?e "E"}])}
+                :meta {:a {:init "A"}
+                       ?c {:init "C"}
+                       ?e {:init "E"}}]
    (str (= @form
            (do (reset! ?a 1)
                (reset! ?b 2)
@@ -532,20 +540,20 @@
 ;; Conditionally validating fields
 
 (cljs
- (with-form [!form (merge {:type (?type :init :text)}
-                          (case ?type
-                            :text {:content ?text}
-                            :image-url {:image-url ?image-url}))
-             :required [?type]
-             :validators {?type #{:text :image-url}
-                          ?text (fn [v {:syms [?type]}]
-                                  (when (and (= @?type :text)
-                                             (not (string? v)))
-                                    "Must be a string"))
-                          ?image-url (fn [v {:syms [?type]}]
-                                       (when (and (= @?type :image-url)
-                                                  (not (some-> v (str/starts-with? "https://"))))
-                                         "Must be a secure URL beginning with https://"))}]
+ (reagent-form [!form (merge {:type (?type :init :text)}
+                             (case ?type
+                               :text {:content ?text}
+                               :image-url {:image-url ?image-url}))
+                :required [?type]
+                :validators {?type #{:text :image-url}
+                             ?text (fn [v {:syms [?type]}]
+                                     (when (and (= @?type :text)
+                                                (not (string? v)))
+                                       "Must be a string"))
+                             ?image-url (fn [v {:syms [?type]}]
+                                          (when (and (= @?type :image-url)
+                                                     (not (some-> v (str/starts-with? "https://"))))
+                                            "Must be a secure URL beginning with https://"))}]
 
    [:div.flex.flex-col.gap-2.w-64
     (str "type: " @?type)

@@ -1,13 +1,12 @@
 (ns inside-out.forms
   "API namespace"
-  (:refer-clojure :exclude [assoc-in atom descendants update-vals])
-  (:require #?@(:cljs [[reagent.core :as reagent]
-                       [reagent.ratom :as ratom]])
-            [clojure.core :as core]
+  (:refer-clojure :exclude [assoc-in descendants update-vals])
+  (:require [clojure.core :as core]
             [clojure.string :as str]
             [inside-out.macros :as macros :refer [swap->]]
             [inside-out.util :as util :refer [assoc-in update-vals]]
-            [promesa.core :as p])
+            [promesa.core :as p]
+            [re-db.reactive :as r])
   #?(:cljs (:require-macros [inside-out.forms])))
 
 ;; intended to be overridden via set! in cljs
@@ -82,8 +81,6 @@
       v
       (closest (parent field) pred))))
 
-(def atom* #?(:cljs reagent/atom :clj clojure.core/atom))
-
 (defn message
   ([type] {:type type})
   ([type content] {:type type :content content})
@@ -95,7 +92,7 @@
      (if (nil? ms)
        f
        (let [last-time (volatile! (- (js/Date.now) ms 1))
-             last-result (atom* nil)
+             last-result (r/atom nil)
              next-args (volatile! nil)
              next-timeout (volatile! nil)
              eval! (fn [args]
@@ -120,7 +117,7 @@
   #?(:clj
      f
      :cljs
-     (let [state (atom* nil)
+     (let [state (r/atom nil)
            progress-msg (message :in-progress "Loading...")
            request! (debounce debounce-ms
                       (fn [value context error]
@@ -208,9 +205,9 @@
       {:type :invalid
        :content (str "Too short (min " i " chars)")})))
 
-(defonce !validators (atom* {:required required
-                             :max-length max-length
-                             :min-length min-length}))
+(defonce !validators (r/atom {:required required
+                              :max-length max-length
+                              :min-length min-length}))
 
 (defn ensure-vector [x]
   (when x
@@ -228,9 +225,7 @@
                         (replace {:required (:required @!validators)})
                         (mapv #(init-validator % field)))
         messages-fn #(compute-messages @field validators (field-context field))]
-    #?(:cljs (ratom/make-reaction messages-fn)
-       :clj  (reify clojure.lang.IDeref
-               (deref [_] (messages-fn))))))
+    (r/make-reaction messages-fn)))
 
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]
@@ -247,10 +242,10 @@
         metadata (merge inherited-meta meta)
         field (->Field parent
                        compute
-                       (atom* (:init metadata))
+                       (r/atom (:init metadata))
                        metadata
-                       (atom* {})
-                       (clojure.core/atom {}))]
+                       (r/atom {})
+                       (atom {}))]
     (swap! (!meta field) assoc :!messages (messages-reaction field))
     field))
 
@@ -429,10 +424,10 @@
      (let [watch-key (gensym "wait-for-async-validators")]
        (js/Promise.
         (fn [resolve reject]
-          (let [waiting? (reagent/track! #(in-progress? form))
+          (let [waiting? (r/reaction! (in-progress? form))
                 stop! (fn []
                         (remove-watch waiting? watch-key)
-                        (reagent/dispose! waiting?)
+                        (r/dispose! waiting?)
                         (resolve))]
             (if @waiting?
               (add-watch waiting? watch-key
@@ -508,12 +503,15 @@
             (dissoc :focused)
             (assoc :touched true))))
 
+(defmacro form [expr & {:as opts}]
+  (macros/form* &form &env expr opts))
+
+(defmacro with-form [bindings & body]
+  (macros/with-form* &form &env {} bindings body))
+
 (comment
  ;; change-handler can be generated from cursor
  {:on-change (change-handler ?last)})
-
-
-(defmacro form [expr & opts] `(inside-out.macros/form ~expr ~@opts))
 
 (defn valid?+
   "[async] Touches form, waits for async validators to complete, returns true if form is valid."
