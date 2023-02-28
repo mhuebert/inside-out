@@ -2,22 +2,17 @@
         org.clojure/clojurescript {:mvn/version "1.11.60"}
         rewrite-clj/rewrite-clj {:mvn/version "1.1.45"}
         applied-science/js-interop {:mvn/version "0.3.3"}
-        io.github.mhuebert/re-db {:git/sha "b19591ff53bec6af2e83ffe2c2afef06c7013f03"}
+        io.github.mhuebert/re-db {#_#_:local/root "../re-db"
+                                  :git/sha "b20f07a902681cba77a998f71e88d3dc9d818660"}
         funcool/promesa {:mvn/version "9.2.541"}
         thheller/shadow-cljs {:mvn/version "2.20.13"}}
  :aliases
  ;; for compiling clerk notebook
  {:clerk {:extra-paths ["dev"]
           :extra-deps {io.github.mhuebert/clerk-cljs
-                       {:git/sha "7570ae50c8c10111a3c555142d410a9df5f0927a"}
-                       io.github.nextjournal/clerk
-                       {:git/sha "ce767a6fa846cbc2ddb113956aa2fa0fe19dd157"}
-                       io.github.nextjournal/clerk.render
-                       {:git/url "https://github.com/nextjournal/clerk.git"
-                        :git/sha "ce767a6fa846cbc2ddb113956aa2fa0fe19dd157"
-                        :deps/root "render"}}}
+                       {:git/sha "3cf47f811042fa131c75ba8940260846d8b6d75f"}}}
 
   ;; for working on Clerk
   :clerk-local {:extra-paths ["dev"]
-                :extra-deps {io.github.nextjournal/clerk.viewer
-                             {:local/root "../clerk/viewer"}}}}}
+                :extra-deps {io.github.mhuebert/clerk-cljs
+                             {:local/root "../clerk-cljs"}}}}}

@@ -274,15 +274,14 @@
         options (apply hash-map (drop 2 bindings))
         _ (assert (every? keyword? (keys options)) (str "Invalid options (not a keyword: " (remove keyword? (keys options)) ")"))
         {:form/keys [fields compute meta]} (analyze-form expr (merge analyzer-options options))]
-    `(r/reaction
-      (hooks/with-let [~root-sym (~'inside-out.forms/root ~compute ~meta ~(vec (vals fields)))
-                       ~@(->> fields
-                              (mapcat (fn [[sym {:keys [many]}]]
-                                        [(cond-> sym
-                                                 many
-                                                 (with-meta {:many/bindings (->> many :many/fields keys vec)}))
-                                         `(get ~root-sym '~sym)])))]
-                      ~@body))))
+    `(hooks/with-let [~root-sym (~'inside-out.forms/root ~compute ~meta ~(vec (vals fields)))
+                      ~@(->> fields
+                             (mapcat (fn [[sym {:keys [many]}]]
+                                       [(cond-> sym
+                                                many
+                                                (with-meta {:many/bindings (->> many :many/fields keys vec)}))
+                                        `(get ~root-sym '~sym)])))]
+                     ~@body)))
 
 (defn form* [_form _env expr options]
   (let [{:form/keys [fields compute meta]} (analyze-form expr options)]

@@ -2,22 +2,20 @@
 (ns inside-out.notebook
   {:nextjournal.clerk/toc true
    :nextjournal.clerk/no-cache true}
-  (:require [applied-science.js-interop :as j]
-            [clojure.string :as str]
-            [mhuebert.clerk-cljs :refer [cljs]]
-            [inside-out.forms :as forms ]
-            [inside-out.reagent]
+  (:require [clojure.string :as str]
+            [mhuebert.clerk-cljs :refer [show-cljs]]
+            [inside-out.forms :as forms]
+            [inside-out.reagent :refer [with-form] :rename {with-form reagent-form}]
             [inside-out.ui :as ui]
             [nextjournal.clerk :as-alias clerk]
-            [promesa.core :as p])
-  #?(:cljs (:require-macros [inside-out.notebook :refer [reagent-form with-form]])))
+            [promesa.core :as p]
+            [re-db.reactive :as r])
+  #?(:cljs (:require-macros [inside-out.notebook :refer [with-form]])))
 
 #?(:clj
    ^{::clerk/visibility {:code :hide :result :hide}}
-   (defmacro with-form [& body] `(deref (forms/with-form ~@body))))
-#?(:clj
-   ^{::clerk/visibility {:code :hide :result :hide}}
-   (defmacro reagent-form [& body] `(inside-out.reagent/with-form ~@body)))
+   (defmacro with-form [& body] `(r/session
+                                  (forms/with-form ~@body))))
 
 ;; # Inside-Out: a Clojure forms library
 ;;
@@ -51,8 +49,8 @@
 ;; ## Quick Example
 
 (with-form [contact-info {:name ?name}]
-   (reset! ?name "Peter Rabbit")
-   @contact-info)
+  (reset! ?name "Peter Rabbit")
+  @contact-info)
 
 ;; What do we see here?
 ;;
@@ -64,8 +62,9 @@
 ;;
 ;; Let's make this interactive with a text `:input`.
 
-(cljs
- (reagent-form [contact-info {:person/name ?name}]
+(show-cljs
+  (reagent-form [contact-info {:person/name ?name}]
+
    [:div
     [:input.border.p-3
      {:value @?name
@@ -113,7 +112,7 @@
 
 ;; Interactive example:
 
-(cljs
+(show-cljs
  (reagent-form [cars (take ?number (repeat "🚙"))
                 :init {?number 3}]
    [:div
@@ -185,7 +184,7 @@
 ;; `inside-out.forms/global-meta`.
 
 ;; in ClojureScript, we would `set!` the var during app initialization:
-(cljs
+(show-cljs
 
  ;; inside your app's initialization code
  (forms/set-global-meta! {:person/name {:field/label "Your name"}})
@@ -194,7 +193,7 @@
 
 ;; Now it is available globally:
 
-(cljs
+(show-cljs
  (reagent-form [form [[:db/add 1 :person/name ?name]]]
    (:field/label ?name)))
 
@@ -290,7 +289,7 @@
 ;;  hasn't been called for the given period of time before evaluating again.
 ;;
 
-(cljs
+(show-cljs
  (reagent-form [form {:name ?name}
                 :validators {?name [(-> (fn [value _] (forms/message :info (str "Hello, " value)))
                                         (forms/validator :compute-when [:focused]))]}]
@@ -298,7 +297,7 @@
 
 ;; Async example
 
-(cljs
+(show-cljs
  (def check-domain
    (-> (fn [value _]
          (p/do (p/delay 200)
@@ -311,7 +310,7 @@
 
 ;; forms/try-submit+ waits for any async validation to finish before continuing
 
-(cljs
+(show-cljs
  (reagent-form [form {:domain (?domain :validators [check-domain])}]
    [:form {:on-submit (fn [^js e]
                         (.preventDefault e)
@@ -329,7 +328,7 @@
 ;; A field is considered "touched" if a user has already interacted with it, or if its parent
 ;; form is touched (we "touch" a form itself when a user tries to submit it).
 
-(cljs
+(show-cljs
  (defn managed-text-input
    "A text-input element that reads metadata from a ?field to display appropriately"
    [?field attrs]
@@ -353,7 +352,7 @@
 ;; Example with validation. `?name` is not required, so the field is valid until
 ;; the user starts typing.
 
-(cljs
+(show-cljs
  (reagent-form [form [[:db/add 1 :person/name ?name]]
                 :meta {?name {:label "Your full name"
                               :validators [(forms/min-length 3)]}}]
@@ -401,7 +400,7 @@
 
 ;; Interactive example:
 
-(cljs
+(show-cljs
  (reagent-form [form [[:db/add 1 :person/pets
                        ;; define a plural field by adding a :many key to the field.
                        ;; it should contain a "template" for each item in the list.
@@ -451,7 +450,7 @@
 
 ;; The following example includes buttons that show how to handle a successful or failed response.
 
-(cljs
+(show-cljs
  (reagent-form [form {:name (?name :init "Sue")
                       :accepted-terms ?accepted}
                 :form/validators [(fn [{:keys [accepted-terms]} _]
@@ -480,7 +479,7 @@
 
 ;; `forms/clear!` resets a form to its initial state
 
-(cljs
+(show-cljs
  (reagent-form [form {:a ?a
                       :b (?b :init "B")
                       :c ?c
@@ -539,7 +538,7 @@
 
 ;; Conditionally validating fields
 
-(cljs
+(show-cljs
  (reagent-form [!form (merge {:type (?type :init :text)}
                              (case ?type
                                :text {:content ?text}

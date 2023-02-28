@@ -23,6 +23,7 @@
                         :out-path "public/build"} opts)))
 
 (comment
+ (shadow.cljs.devtools.api/watch :clerk)
  (start)
  (publish!)
  (clerk/clear-cache!)

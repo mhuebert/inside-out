@@ -1,7 +1,6 @@
 (ns inside-out.ui
   (:require [inside-out.forms :as forms]
-            [inside-out.util :refer [merge-props]]
-            [nextjournal.clerk.viewer :as viewer]))
+            [inside-out.util :refer [merge-props]]))
 
 (def nonbreaking-space "the &nbsp; character (for taking up space when no messages are present)"
   \u00A0)

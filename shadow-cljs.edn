@@ -4,11 +4,7 @@
  :builds
  {:clerk
   {:target :esm
-   :modules {:main {:entries [nextjournal.clerk.static-app
-                              nextjournal.viewer.notebook
-                              nextjournal.clerk.render
-
-                              inside-out.test-notebook
+   :modules {:main {:entries [inside-out.test-notebook
                               inside-out.notebook]}}
    :output-dir "public/js"
    :release {:output-dir "public/build/js"}

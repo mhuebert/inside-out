@@ -14,7 +14,8 @@
 ;; eg {:person/name {:label "Name"}}
 (def global-meta {})
 
-(defn set-global-meta! [m] (set! global-meta m))
+#?(:cljs
+   (defn set-global-meta! [m] (set! global-meta m)))
 
 (declare closest)
 
