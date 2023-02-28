@@ -8,6 +8,8 @@ jobs:
   publish:
     runs-on: ubuntu-20.04
     steps:
+      - name: setup yarn git deps
+        run: git config --global url."https://".insteadOf ssh://
       - uses: actions/cache@v3
         with:
             path: |
