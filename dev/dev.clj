@@ -18,7 +18,7 @@
 (defn publish! [& [opts]]
   (swap! config/!resource->url merge {"/js/viewer.js" "/js/main.js"})
   (clerk/build! (merge {:index "dev/inside_out/notebook.cljc"
-                        :compile-css true
+                        :compile-css false
                         :bundle false
                         :out-path "public/build"} opts)))
 
