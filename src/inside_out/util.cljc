@@ -36,10 +36,13 @@
 (defn merge-classes [c1 c2]
   (str (as-str c1) " " (as-str c2)))
 
-(defn merge-props [p1 p2]
-  (let [p (merge p1 p2)]
-    (cond-> p
-            (:class p)
-            (assoc :class (merge-classes (:class p1) (:class p2)))
-            (:style p)
-            (assoc :style (merge (:style p1) (:style p2))))))
+(defn merge-props
+  ([p1 p2 & more]
+   (reduce merge-props (merge-props p1 p2) more))
+  ([p1 p2]
+   (let [p (merge p1 p2)]
+     (cond-> p
+             (:class p)
+             (assoc :class (merge-classes (:class p1) (:class p2)))
+             (:style p)
+             (assoc :style (merge (:style p1) (:style p2)))))))
