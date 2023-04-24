@@ -12,7 +12,7 @@
 ;; intended to be overridden via set! in cljs
 ;; intended use case is defining attribute-metadata globally
 ;; eg {:person/name {:label "Name"}}
-(def global-meta {})
+(defonce global-meta {})
 
 #?(:cljs
    (defn set-global-meta! [m] (set! global-meta m)))
@@ -349,7 +349,8 @@
   (let [ch (vals @(!children ?field))]
     (concat ch (mapcat descendants ch))))
 
-(defn computed-messages [^Field field] @(:!messages field))
+(defn computed-messages [^Field field]
+  @(:!messages field))
 
 (defn messages
   "Returns validator messages for a field/form"
