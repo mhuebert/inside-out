@@ -1,26 +1,31 @@
 (ns dev
-  (:require [clojure.string :as str]
+  (:require [babashka.fs :as fs]
+            [clojure.string :as str]
             [nextjournal.clerk :as clerk]
             [nextjournal.clerk.config :as config]
-            [nextjournal.clerk.viewer]))
+            [nextjournal.clerk.viewer :as clerk.viewer]))
 
 (defn start []
   (swap! config/!resource->url (fn [x]
                                  (-> x
                                      (assoc "/js/viewer.js" "http://localhost:8765/js/main.js")
                                      (dissoc "/css/viewer.css"))))
-  (clerk/serve! {:browse? true
+  (clerk/serve! {:resource->url {"/js/viewer.js" "http://localhost:8765/js/main.js"
+                                 "/css/viewer.css" nil}
+                 :port 7777
+                 :browse? true
                  :out-path "public"
                  :watch-paths ["dev"]
                  :show-filter-fn #(str/includes? % "notebooks")})
   (clerk/show! "dev/inside_out/notebook.cljc"))
 
 (defn publish! [& [opts]]
-  (swap! config/!resource->url merge {"/js/viewer.js" "/js/main.js"})
-  (clerk/build! (merge {:index "dev/inside_out/notebook.cljc"
+  (clerk/build! (merge {:resource->url {"/js/viewer.js" "/js/main.js"}
+                        :index "dev/inside_out/notebook.cljc"
                         :compile-css false
                         :bundle false
-                        :out-path "public/build"} opts)))
+                        :out-path "public/build"}
+                       opts)))
 
 (comment
  (shadow.cljs.devtools.api/watch :clerk)

@@ -3,7 +3,7 @@
         rewrite-clj/rewrite-clj {:mvn/version "1.1.45"}
         applied-science/js-interop {:mvn/version "0.3.3"}
         io.github.mhuebert/re-db {#_#_:local/root "../re-db"
-                                  :git/sha "b20f07a902681cba77a998f71e88d3dc9d818660"}
+                                  :git/sha "240543d68d926d59d534e43e90548c72ec5e3c13"}
         funcool/promesa {:mvn/version "9.2.541"}
         thheller/shadow-cljs {:mvn/version "2.20.13"}}
  :aliases

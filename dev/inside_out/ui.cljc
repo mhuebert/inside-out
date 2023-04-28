@@ -11,12 +11,13 @@
 (def invalid-bg-color "light-pink")
 
 (defn view-message [{:keys [type content]}]
-  [:div.text-xs.mt-1
-   {:style (case type
-             (:error :invalid) {:color invalid-text-color
-                                :background-color invalid-bg-color}
-             nil)}
-   content])
+  (when content
+    [:div.text-xs.mt-1
+     {:style (case type
+               (:error :invalid) {:color invalid-text-color
+                                  :background-color invalid-bg-color}
+               nil)}
+     content]))
 
 (def ring-color-invalid
   {"--tw-ring-color" invalid-border-color})
@@ -43,7 +44,9 @@
                                 "ring-2 ring-offset-2 ring-red-500 focus:ring-red-500")}
                       attrs)]
         (when (seq messages)
-          (into [:div.mt-1] (map view-message) messages))])))
+          (into [:div.mt-1] (map view-message) messages))
+        (when (forms/in-progress? ?field)
+          "Loading...")])))
 
 #?(:cljs
    (defn input-checkbox

@@ -9,10 +9,18 @@
             [re-db.reactive :as r])
   #?(:cljs (:require-macros [inside-out.forms])))
 
+;; TODO
+;; consider how to handle async validators "on blur" only,
+;; consider how to handle server-side validation which comes back as a map of {<:attribute> [... "error"]}
+;;   (maybe: iterate through child fields looking for a matching attribute?
+;;    need to have server-messages or custom-messages on each field?)
+
+
+
+;; fn or map that returns metadata per symbol/attribute.
 ;; intended to be overridden via set! in cljs
-;; intended use case is defining attribute-metadata globally
 ;; eg {:person/name {:label "Name"}}
-(defonce global-meta {})
+(defonce global-meta nil)
 
 #?(:cljs
    (defn set-global-meta! [m] (set! global-meta m)))
@@ -87,74 +95,124 @@
   ([type content] {:type type :content content})
   ([type content & {:as options}] (merge options (message type content))))
 
-(defn debounce [ms f]
+(defn wrap-messages
+  ([m] (wrap-messages :invalid m))
+  ([default-type m]
+   (cond (string? m) [(message default-type m)]
+         (map? m) [m]
+         (sequential? m) (into []
+                               (mapcat (partial wrap-messages default-type))
+                               m)
+         (nil? m) []
+         :else m)))
+
+(defn validator [f & {:as options :keys [debounce-ms compute-when]}]
+  (vary-meta f assoc ::validator options))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Stateful validators
+;;
+;; A validator can call `get-vstate` and `set-vstate` to manage reactive state.
+
+(defn get-vstate
+  "Gets the state of a validator."
+  [f context]
+  (@(:validator/!state context) [(:sym context) f]))
+
+(defn set-vstate
+  "Sets the state of a validator."
+  [f context new-state]
+  (swap! (:validator/!state context) assoc [(:sym context) f] new-state))
+
+(defn debounce
+  "Wraps a validator function to debounce its execution."
+  [ms f]
   #?(:clj f
      :cljs
      (if (nil? ms)
        f
        (let [last-time (volatile! (- (js/Date.now) ms 1))
-             last-result (r/atom nil)
              next-args (volatile! nil)
              next-timeout (volatile! nil)
-             eval! (fn [args]
+             eval! (fn [value context]
                      (vreset! next-args nil)
                      (vreset! last-time (js/Date.now))
-                     (reset! last-result (apply f args)))
-             schedule! (fn [args]
-                         (do (vreset! next-args args)
-                             (some-> @next-timeout js/clearTimeout)
-                             (vreset! next-timeout (js/setTimeout #(eval! @next-args) ms))))]
-         (fn debounced [& args]
-           (let [diff (- (js/Date.now) @last-time)]
-             (if (or @next-args (< diff ms))
-               (schedule! args)
-               (eval! args)))
-           @last-result)))))
+                     (set-vstate f context #:debounce{:result (f value context)
+                                                      :for-value value}))
+             schedule! (fn [value ctx]
+                         (vreset! next-args [value ctx])
+                         (some-> @next-timeout js/clearTimeout)
+                         (vreset! next-timeout (js/setTimeout
+                                                #(apply eval! @next-args)
+                                                ms)))]
+         (fn [value context]
+           (let [vstate (get-vstate f context)
+                 diff (- (js/Date.now) @last-time)
+                 _ (cond (and (contains? vstate :debounce/for-value)
+                              (= value (:debounce/for-value vstate))) nil ;; value hasn't changed, no-op
+                         (or
+                          @next-args ;; already scheduled, update timer
+                          (< diff ms)) ;; still within debounce window, update timer
+                         (schedule! value context)
+                         :else (r/silently (eval! value context)))]
+             (cond-> (:debounce/result (get-vstate f context))
+                     @next-args
+                     (-> wrap-messages (conj (message :in-progress))))))))))
 
-(defn validator [f & {:as options :keys [async debounce-ms when-touched]}]
-  (vary-meta f assoc ::validator options))
+(defn handle-async-promise
+  ;; handles a promise returned by an async validator
+  [promise f value context]
+  (let [current? #(= value (:async/result-value (get-vstate f context)))] ;; ignore promise results for old values
+    (r/silently
+     (set-vstate f context #:async{:result-value value
+                                   :in-progress (message :in-progress)}))
+    (-> (p/let [result promise]
+          (when (current?)
+            (set-vstate f context #:async{:result-value value
+                                          :result result})))
+        (p/catch
+         (fn [error]
+           (when (current?)
+             (set-vstate f context #:async{:result-value value
+                                           :error (message :error (ex-message error))})))))
+    (or (:async/error (get-vstate f context))
+        (message :in-progress))))
 
-(defn- wrap-async-validator! [f {:keys [debounce-ms]} _field]
-  #?(:clj
-     f
+(defn async-result
+  ;; handles
+  [vstate f value context]
+  (when (contains? vstate :async/result-value)
+    (or (:async/error vstate)
+        (:async/in-progress vstate)
+        (if (= value (:async/result-value vstate))
+          (:async/result vstate)
+          (handle-async-promise (f value context) f value context)))))
+
+(defn compute-validator [f value context]
+  #?(:clj (f value context)
      :cljs
-     (let [state (r/atom nil)
-           progress-msg (message :in-progress "Loading...")
-           request! (debounce debounce-ms
-                      (fn [value context error]
-                        (let [this-req (inc (:req @state 0))]
-                          (swap! state assoc :in-progress? true :req this-req)
-                          (p/catch
-                           (p/let [result (f value context state)]
-                             (swap-> state
-                                     (assoc-in [:cache value] result)
-                                     (cond-> (= this-req (:req @state))
-                                             (dissoc :in-progress? :error))))
-                           (fn [e]
-                             (when (= this-req (:req @state))
-                               (swap-> state
-                                       (dissoc :in-progress?)
-                                       (assoc :error (message :error (str "Validation error: " e)))))))
-                          (keep identity [error progress-msg]))))]
-       (fn async-validate [value context]
-         #?(:cljs
-            (let [{:keys [in-progress? cache error] :as st} @state]
-              (or (when in-progress? progress-msg)
-                  (get cache value)
-                  (request! value context error))))))))
+     (let [vstate (get-vstate f context)]
+       (if (contains? vstate :async/result-value)
+         (async-result vstate f value context)
+         (let [result (f value context)]
+           (if (p/promise? result)
+             (handle-async-promise result f value context)
+             result))))))
 
-(defn wrap-touched-validator [f options field]
-  (fn [value context]
-    (when (:touched field)
-      (f value context))))
+(defn wrap-debounced-validator! [f {:keys [debounce-ms]} _field]
+  (if debounce-ms
+    (debounce debounce-ms f)
+    f))
 
 (defn get-any [ks m]
   (reduce (fn [ret k] (if-some [v (k m)] (reduced v) ret)) nil ks))
 
 (defn wrap-compute-when [f {:keys [compute-when]} field]
-  (fn [value context]
-    (when (get-any compute-when field)
-      (f value context))))
+  (if compute-when
+    (fn [value context]
+      (when (get-any compute-when field)
+        (f value context)))
+    f))
 
 (defn is [pred message]
   (fn [v ctx]
@@ -173,15 +231,12 @@
                 (identical? f number?) (is f "Must be a number")
                 (identical? f boolean?) (is f "Must be a boolean")
                 :else f)]
-    (if-let [options (some-> (meta f) ::validator)]
-      (let [{:keys [async compute-when]} options]
-        (cond-> f
-                async (wrap-async-validator! options field)
-                compute-when (wrap-compute-when options field)))
-      f)))
+    (let [options (some-> (meta f) ::validator)]
+      (-> f
+          (wrap-compute-when options field)
+          (wrap-debounced-validator! options field)))))
 
 (declare compute-messages field-context)
-
 
 ;; ## Validation
 
@@ -220,12 +275,15 @@
   ;; a form's messages are computed in a reaction
   ;; (to only do the work when dependent values change)
   (let [metadata (.-metadata field)
+        astate (r/atom {})
         validators (->> (:validators metadata)
                         ensure-vector
                         (concat (when (:required metadata) [:required]))
                         (replace {:required (:required @!validators)})
                         (mapv #(init-validator % field)))
-        messages-fn #(compute-messages @field validators (field-context field))]
+        messages-fn #(do @astate
+                         (compute-messages @field validators (assoc (field-context field)
+                                                               :validator/!state astate)))]
     (r/make-reaction messages-fn)))
 
 (defn- make-field
@@ -236,11 +294,13 @@
   (let [inherited-meta (->> (iterate inside-out.forms/parent parent)
                             (into () (comp (take-while identity)
                                            (keep #(:meta (.-metadata ^Field %)))))
-                            (cons global-meta)
                             (into {}
                                   (map #(cond->> (% sym)
                                                  attribute (concat (% attribute))))))
-        metadata (merge inherited-meta meta)
+        metadata (merge (when global-meta
+                          (merge (global-meta sym)
+                                 (global-meta attribute)))
+                        inherited-meta meta)
         field (->Field parent
                        compute
                        (r/atom (:init metadata))
@@ -319,31 +379,24 @@
     :sym (:sym field)
     #_#_:path (debug-name field)))
 
-(defn wrap-messages
-  ([m] (wrap-messages :invalid m))
-  ([default-type m]
-   (cond (string? m) [{:content m :type default-type}]
-         (map? m) [m]
-         (sequential? m) (into (empty m)
-                               (mapcat (partial wrap-messages default-type))
-                               m)
-         :else m)))
-
 (defn compute-messages
   ([field]
-   (compute-messages @field (:validators field) (field-context field)))
+   (compute-messages @field (:validators field) (assoc (field-context field)
+                                                  :validator/!state (atom {}))))
   ([value validators context]
    (->> validators
-        (into [] (comp
-                  (mapcat #(wrap-messages :invalid (% value context)))
-                  (keep identity)
-                  (map (fn [x]
-                         (assert (and (map? x) (:type x))
-                                 (str "Validator message must be a map containing :type. Checking "
-                                      (:path context) ", found " x))
-                         x))
-                  (let [sym (:sym context)]
-                    (map #(assoc % :sym sym))))))))
+        (into []
+              (comp
+               (map #(compute-validator % value context))
+               (mapcat (partial wrap-messages :invalid))
+               (keep identity)
+               (map (fn [x]
+                      (assert (and (map? x) (:type x))
+                              (str "Validator message must be a map containing :type. Checking "
+                                   (:path context) ", found " x))
+                      x))
+               (let [sym (:sym context)]
+                 (map #(assoc % :sym sym))))))))
 
 (defn descendants [?field]
   (let [ch (vals @(!children ?field))]
@@ -525,7 +578,7 @@
      :clj (valid? form)))
 
 (defmacro try-submit+
-  "[async] Evaluates `submit-expr` if valid?+ returns true. The for's :remove-messages are set to
+  "[async] Evaluates `submit-expr` if valid?+ returns true. The form's :remove-messages are set to
    the return value of submit-expr (if it is a message) or nil."
   [form submit-expr]
   (if (:ns &env)
