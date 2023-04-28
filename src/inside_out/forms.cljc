@@ -99,15 +99,19 @@
   ([m] (wrap-messages :invalid m))
   ([default-type m]
    (cond (string? m) [(message default-type m)]
-         (map? m) [m]
+         (map? m) (do
+                    (when-not (:type m) (throw (ex-info "Message must have a :type key" {:message m})))
+                    [m])
          (sequential? m) (into []
-                               (mapcat (partial wrap-messages default-type))
+                               (comp (mapcat (partial wrap-messages default-type))
+                                     (keep identity))
                                m)
-         (nil? m) []
          :else m)))
 
-(defn validator [f & {:as options :keys [debounce-ms compute-when]}]
-  (vary-meta f assoc ::validator options))
+(defn validator [f & {:as options :keys [debounce-ms
+                                         compute-when
+                                         on-blur]}]
+  (vary-meta f merge options))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Stateful validators
@@ -116,15 +120,19 @@
 
 (defn get-vstate
   "Gets the state of a validator."
-  [f context]
-  (@(:validator/!state context) [(:sym context) f]))
+  [k f context]
+  (@(:validator/!state context) [k (:sym context) f]))
 
 (defn set-vstate
   "Sets the state of a validator."
-  [f context new-state]
-  (swap! (:validator/!state context) assoc [(:sym context) f] new-state))
+  [k f context new-state]
+  (swap! (:validator/!state context) assoc [k (:sym context) f] new-state))
 
-(defn debounce
+(defn valid-vstate? [value vstate]
+  (and (contains? vstate :for-value)
+       (= value (:for-value vstate))))
+
+(defn validate-debounced
   "Wraps a validator function to debounce its execution."
   [ms f]
   #?(:clj f
@@ -137,7 +145,7 @@
              eval! (fn [value context]
                      (vreset! next-args nil)
                      (vreset! last-time (js/Date.now))
-                     (set-vstate f context #:debounce{:result (f value context)
+                     (set-vstate :debounce f context {:result (f value context)
                                                       :for-value value}))
              schedule! (fn [value ctx]
                          (vreset! next-args [value ctx])
@@ -146,62 +154,71 @@
                                                 #(apply eval! @next-args)
                                                 ms)))]
          (with-meta (fn [value context]
-                      (let [vstate (get-vstate f context)
+                      (let [vstate (get-vstate :debounce f context)
                             diff (- (js/Date.now) @last-time)
-                            _ (cond (and (contains? vstate :debounce/for-value)
-                                         (= value (:debounce/for-value vstate))) nil ;; value hasn't changed, no-op
+                            _ (cond (valid-vstate? value vstate) nil ;; value hasn't changed, no-op
                                     (or
                                      @next-args ;; already scheduled, update timer
                                      (< diff ms)) ;; still within debounce window, update timer
                                     (schedule! value context)
-                                    :else (r/silently (eval! value context)))]
-                        (cond-> (:debounce/result (get-vstate f context))
-                                @next-args
-                                (-> wrap-messages (conj (message :in-progress))))))
+                                    :else (r/silently (eval! value context)))
+                            result (:result (get-vstate :debounce f context))]
+                        (if (and @next-args (not (p/promise? result)))
+                          (-> result wrap-messages (conj (message :in-progress)))
+                          result)))
                     (meta f))))))
 
+(defn validate-on-blur
+  "Validator will only run when the field is blurred. Messages remain displayed until value changes."
+  [f]
+  (fn [value {:as context :keys [field]}]
+    (if (:blurred field)
+      (let [result (f value context)]
+        (->> {:result result :for-value value}
+             (set-vstate :on-blur f context)
+             (r/silently))
+        result)
+      (let [vstate (get-vstate :on-blur f context)]
+        (when (valid-vstate? value vstate)
+          (:result vstate))))))
+
 (defn handle-async-promise
-  ;; handles a promise returned by an async validator
+  ;; handles a newly-created promise, returned by an async validator.
   [promise f value context]
-  (let [current? #(= value (:async/result-value (get-vstate f context)))] ;; ignore promise results for old values
+  (let [current? #(valid-vstate? value (get-vstate :async f context))] ;; ignore promise results for old values
     (r/silently
-     (set-vstate f context #:async{:result-value value
+     (set-vstate :async f context {:for-value value
                                    :in-progress (message :in-progress)}))
     (-> (p/let [result promise]
           (when (current?)
-            (set-vstate f context #:async{:result-value value
+            (set-vstate :async f context {:for-value value
                                           :result result})))
         (p/catch
          (fn [error]
            (when (current?)
-             (set-vstate f context #:async{:result-value value
+             (set-vstate :async f context {:for-value value
                                            :error (message :error (ex-message error))})))))
-    (or (:async/error (get-vstate f context))
-        (message :in-progress))))
+    (message :in-progress)))
 
 (defn async-result
-  ;; handles
-  [vstate f value context]
-  (or (:async/error vstate)
-      (:async/in-progress vstate)
-      (if (= value (:async/result-value vstate))
-        (:async/result vstate)
-        (handle-async-promise (f value context) f value context))))
+  [f context]
+  (let [{:keys [error in-progress result]} (get-vstate :async f context)]
+    (or error in-progress result)))
 
 (defn compute-validator [f value context]
-  #?(:clj (f value context)
-     :cljs
-     (let [vstate (get-vstate f context)]
-       (if (contains? vstate :async/result-value)
-         (async-result vstate f value context)
-         (let [result (f value context)]
-           (if (p/promise? result)
-             (handle-async-promise result f value context)
-             result))))))
+  (wrap-messages
+   #?(:clj (f value context)
+      :cljs
+      (if (valid-vstate? value (get-vstate :async f context))
+        (async-result f context)
+        (let [result (f value context)]
+          (if (p/promise? result)
+            (handle-async-promise result f value context)
+            result))))))
 
 (defn wrap-debounced-validator! [f {:keys [debounce-ms]} _field]
   (if debounce-ms
-    (debounce debounce-ms f)
+    (validate-debounced debounce-ms f)
     f))
 
 (defn get-any [ks m]
@@ -224,7 +241,7 @@
                 (identical? f number?) (is f "Must be a number")
                 (identical? f boolean?) (is f "Must be a boolean")
                 :else f)]
-    (let [options (some-> (meta f) ::validator)]
+    (let [options (meta f)]
       (-> f
           (wrap-debounced-validator! options field)))))
 
@@ -368,6 +385,7 @@
 (defn field-context
   [field]
   (assoc (closest field (comp not-empty deref !children))
+    :field field
     :sym (:sym field)
     #_#_:path (debug-name field)))
 
@@ -375,23 +393,15 @@
   ([field]
    (compute-messages field @field (:validators field) (assoc (field-context field)
                                                         :validator/!state (atom {}))))
-  ([field value validators context]
+  ([field value validators {:as context :keys [sym]}]
    (->> validators
         (into []
               (comp
                (filter #(if-let [compute-when (:compute-when (::validator (meta %)))]
                           (get-any compute-when field)
                           true))
-               (map #(compute-validator % value context))
-               (mapcat (partial wrap-messages :invalid))
-               (keep identity)
-               (map (fn [x]
-                      (assert (and (map? x) (:type x))
-                              (str "Validator message must be a map containing :type. Checking "
-                                   (:path context) ", found " x))
-                      x))
-               (let [sym (:sym context)]
-                 (map #(assoc % :sym sym))))))))
+               (mapcat #(compute-validator % value context))
+               (map #(assoc % :sym sym)))))))
 
 (defn descendants [?field]
   (let [ch (vals @(!children ?field))]
