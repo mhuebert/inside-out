@@ -128,13 +128,15 @@
   [k f context new-state]
   (swap! (:validator/!state context) assoc [k (:sym context) f] new-state))
 
-(defn valid-vstate? [value vstate]
+(defn valid-vstate?
+  "The vstate is valid for the current value"
+  [value vstate]
   (and (contains? vstate :for-value)
        (= value (:for-value vstate))))
 
-(defn validate-debounced
+(defn debounce
   "Wraps a validator function to debounce its execution."
-  [ms f]
+  [f ms]
   #?(:clj f
      :cljs
      (if (nil? ms)
@@ -168,7 +170,7 @@
                           result)))
                     (meta f))))))
 
-(defn validate-on-blur
+(defn on-blur
   "Validator will only run when the field is blurred. Messages remain displayed until value changes."
   [f]
   (fn [value {:as context :keys [field]}]
@@ -182,23 +184,36 @@
         (when (valid-vstate? value vstate)
           (:result vstate))))))
 
-(defn handle-async-promise
+(defn get-any [ks m]
+  (reduce (fn [ret k] (if-some [v (k m)] (reduced v) ret)) nil ks))
+
+(defn validate-when [f conditions]
+  (fn [value context]
+    (when (get-any conditions (:field context))
+      (f value context))))
+
+(defn handle-promise-result
   ;; handles a newly-created promise, returned by an async validator.
-  [promise f value context]
-  (let [current? #(valid-vstate? value (get-vstate :async f context))] ;; ignore promise results for old values
-    (r/silently
-     (set-vstate :async f context {:for-value value
-                                   :in-progress (message :in-progress)}))
-    (-> (p/let [result promise]
-          (when (current?)
-            (set-vstate :async f context {:for-value value
-                                          :result result})))
-        (p/catch
-         (fn [error]
-           (when (current?)
-             (set-vstate :async f context {:for-value value
-                                           :error (message :error (ex-message error))})))))
-    (message :in-progress)))
+  [result f value context]
+  (if-not (p/promise? result)
+    result
+    (do (when (not= result (:promise (get-vstate :async f context))) ;; in case we've already handled this promise
+          (r/silently
+           (set-vstate :async f context {:for-value value
+                                         :promise result
+                                         :in-progress (message :in-progress)}))
+          (-> (p/let [result result]
+                (when (valid-vstate? value (get-vstate :async f context))
+                  (set-vstate :async f context {:for-value value
+                                                :promise result
+                                                :result result})))
+              (p/catch
+               (fn [error]
+                 (when (valid-vstate? value (get-vstate :async f context))
+                   (set-vstate :async f context {:for-value value
+                                                 :promise result
+                                                 :error (message :error (ex-message error))}))))))
+        (message :in-progress))))
 
 (defn async-result
   [f context]
@@ -209,20 +224,13 @@
   (wrap-messages
    #?(:clj (f value context)
       :cljs
+      ;; if we have a valid async result, show it, otherwise compute the result
+      ;; (we need to do this check so that side-effecting async validators don't
+      ;;  re-run while in progress)
       (if (valid-vstate? value (get-vstate :async f context))
         (async-result f context)
-        (let [result (f value context)]
-          (if (p/promise? result)
-            (handle-async-promise result f value context)
-            result))))))
-
-(defn wrap-debounced-validator! [f {:keys [debounce-ms]} _field]
-  (if debounce-ms
-    (validate-debounced debounce-ms f)
-    f))
-
-(defn get-any [ks m]
-  (reduce (fn [ret k] (if-some [v (k m)] (reduced v) ret)) nil ks))
+        (-> (f value context)
+            (handle-promise-result f value context))))))
 
 (defn is [pred message]
   (fn [v ctx]
@@ -235,15 +243,19 @@
   (is #(contains? set %)
       #(str "Value must be one of " (str/join ", " set))))
 
-(defn init-validator [f field]
+(defn init-validator [f]
   (let [f (cond (set? f) (in-set f)
                 (identical? f string?) (is f "Must be a string")
                 (identical? f number?) (is f "Must be a number")
                 (identical? f boolean?) (is f "Must be a boolean")
                 :else f)]
-    (let [options (meta f)]
-      (-> f
-          (wrap-debounced-validator! options field)))))
+    (let [{:keys [debounce-ms
+                  compute-when
+                  on-blur]} (meta f)]
+      (cond-> f
+              debounce-ms (debounce debounce-ms)
+              compute-when (validate-when compute-when)
+              on-blur (on-blur)))))
 
 (declare compute-messages field-context)
 
@@ -289,10 +301,10 @@
                         ensure-vector
                         (concat (when (:required metadata) [:required]))
                         (replace {:required (:required @!validators)})
-                        (mapv #(init-validator % field)))
+                        (mapv init-validator))
         messages-fn #(do @astate
-                         (compute-messages field @field validators (assoc (field-context field)
-                                                                     :validator/!state astate)))]
+                         (compute-messages @field validators (assoc (field-context field)
+                                                               :validator/!state astate)))]
     (r/make-reaction messages-fn)))
 
 (defn- make-field
@@ -391,15 +403,12 @@
 
 (defn compute-messages
   ([field]
-   (compute-messages field @field (:validators field) (assoc (field-context field)
-                                                        :validator/!state (atom {}))))
-  ([field value validators {:as context :keys [sym]}]
+   (compute-messages @field (:validators field) (assoc (field-context field)
+                                                  :validator/!state (atom {}))))
+  ([value validators {:as context :keys [sym]}]
    (->> validators
         (into []
               (comp
-               (filter #(if-let [compute-when (:compute-when (::validator (meta %)))]
-                          (get-any compute-when field)
-                          true))
                (mapcat #(compute-validator % value context))
                (map #(assoc % :sym sym)))))))
 
@@ -541,8 +550,8 @@
   field)
 
 (comment
- (compute-messages nil "abc" [required (max-length 2)] nil)
- (compute-messages nil nil [required (max-length 2)] nil))
+ (compute-messages "abc" [required (max-length 2)] nil)
+ (compute-messages nil [required (max-length 2)] nil))
 
 (defn change-handler
   "Returns a callback which resets a ref to target.value on change"

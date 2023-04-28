@@ -7,29 +7,19 @@
             [inside-out.ui :as ui]
             [promesa.core :as p]))
 
-(show-cljs
-  (with-form [foo {:bar (?bar :init "a")}
-              :meta {?bar {:validators [(forms/validate-debounced 300
-                                                                  (fn [value context]
-                                            (prn :debounced-promise-fn)
-                                            (p/do (p/delay 1000)
-                                                  (forms/message :info (str "delay@1000 " value)))))]}}]
-    [:div
-     (ui/input-text ?bar {})]))
-
 ;; Debounce
 
 (show-cljs
   (with-form [foo {:bar (?bar :init "a")}
               :meta {?bar
                      {:validators
-                      [(forms/validate-debounced 1000
-                                                 (fn [value _]
-                           (forms/message :info (str "debounce@1000 " value))))
-                       (forms/validate-debounced 400
-                                                 (fn [value _]
-                           (forms/message :invalid (str "debounce@400 " value))))]}}]
-    [:div
+                      [(-> (fn [value _]
+                             (forms/message :info (str "debounce@1000 " value)))
+                           (forms/debounce 1000))
+                       (-> (fn [value _]
+                             (forms/message :invalid (str "debounce@400  " value)))
+                           (forms/debounce 400))]}}]
+    [:div.font-mono
      (ui/input-text ?bar {})]))
 
 ;; Promises
@@ -41,19 +31,29 @@
                                                 (forms/message :info (str "delay@1000 " value))))
                                         (fn [value context]
                                           (p/do (p/delay 500)
-                                                (forms/message :invalid (str "delay@500 " value))))]}}]
-    [:div
+                                                (forms/message :invalid (str "delay@500  " value))))]}}]
+    [:div.font-mono
      (ui/input-text ?bar {})]))
 
 ;; Promise, computed on blur
 
 (show-cljs
   (with-form [foo {:bar (?bar :init "a")}
-              :meta {?bar {:validators [(->
-                                         (fn [value context]
-                                           (p/do (p/delay 1000)
-                                                 (forms/message :info (str "delay@1000 " value))))
-                                         (forms/validate-on-blur))]}}]
-    [:div
+              :meta {?bar {:validators [(-> (fn [value context]
+                                              (p/do (p/delay 1000)
+                                                    (forms/message :info (str "delay@1000 " value))))
+                                            (forms/on-blur))]}}]
+    [:div.font-mono
+     (ui/input-text ?bar {})]))
+
+;; A debounced promise
+
+(show-cljs
+  (with-form [foo {:bar (?bar :init "a")}
+              :meta {?bar {:validators [(-> (fn [value context]
+                                              (p/do (p/delay 1000)
+                                                    (forms/message :info (str "delay@1000 " value))))
+                                            (forms/debounce 300))]}}]
+    [:div.font-mono
      (ui/input-text ?bar {})]))
 

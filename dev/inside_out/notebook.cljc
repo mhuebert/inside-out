@@ -278,15 +278,14 @@
 ;; Options may be added to a validator function by wrapping with `forms/validator`.
 ;;
 ;; ```clj
-;; (forms/validator f :async true)
+;; (forms/validator f :debounce-ms 300)
 ;; ```
 ;;
 ;;- `:compute-when [...condition]` - only compute when at least one condition
-;;  is met (`:focused`, `:touched`)
-;;- `:async <boolean>` - allows validator to return a promise. results are
-;;  cached by value.
+;;  is met (`:focused`, `:blurred`, `:touched`)
 ;;- `:debounce-ms <ms>` (only relevant when `:async true`) waits until function
 ;;  hasn't been called for the given period of time before evaluating again.
+;; - `:on-blur` - computes at the moment a field is blurred
 ;;
 
 (show-cljs
