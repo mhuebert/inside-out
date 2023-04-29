@@ -6,4 +6,4 @@
 
 (defmacro with-form [bindings & body]
   `(re-db.react/use-derefs
-    (forms/with-form ~bindings ~@body)))
+    (forms/with-form ~bindings [:<> ~@body])))

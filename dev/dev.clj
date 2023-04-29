@@ -3,9 +3,13 @@
             [clojure.string :as str]
             [nextjournal.clerk :as clerk]
             [nextjournal.clerk.config :as config]
-            [nextjournal.clerk.viewer :as clerk.viewer]))
+            [nextjournal.clerk.viewer :as clerk.viewer]
+            [shadow.cljs.devtools.api :as shadow]))
 
-(defn start []
+(defn start
+  {:shadow/requires-server true}
+  []
+  (shadow/watch :clerk)
   (swap! config/!resource->url (fn [x]
                                  (-> x
                                      (assoc "/js/viewer.js" "http://localhost:8765/js/main.js")

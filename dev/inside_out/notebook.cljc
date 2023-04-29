@@ -3,38 +3,62 @@
   {:nextjournal.clerk/toc true
    :nextjournal.clerk/no-cache true}
   (:require [clojure.string :as str]
-            [mhuebert.clerk-cljs :refer [show-cljs]]
             [inside-out.forms :as forms]
-            [inside-out.reagent :refer [with-form] :rename {with-form reagent-form}]
-            [inside-out.ui :as ui]
+            [inside-out.ui :as ui :refer [with-form cljs]]
             [nextjournal.clerk :as-alias clerk]
-            [promesa.core :as p]
-            [re-db.reactive :as r])
-  #?(:cljs (:require-macros [inside-out.notebook :refer [with-form]])))
-
-#?(:clj
-   ^{::clerk/visibility {:code :hide :result :hide}}
-   (defmacro with-form [& body] `(r/session
-                                  (forms/with-form ~@body))))
+            [promesa.core :as p]))
 
 ;; # Inside-Out: a Clojure forms library
 ;;
 ;; _alpha - [feedback welcome](https://github.com/mhuebert/inside-out/discussions)_
 ;;
-;; A tool for writing web forms. Syntax is minimal, to focus on essential concerns: what is our target
-;; data structure? From what fields is it composed? How should these fields behave?
-;;
-;; ## Features
-;;
-;; 1. Concise syntax for defining a form and its fields in one step. Each field stores a value, and behaves
-;;    like an atom (read/write with `@deref` and `reset!`). The form's "output" is computed from its fields
-;;    and can take any shape.
-;;
-;; 2. A metadata system that encourages data-driven design & code re-use, while handling common concerns like
-;;    validation, hints, and error messages to support a high quality UX. Forms should be "driven by data"
-;;    but avoid impenetrable indirection - don't break "jump to source".
-;;
-;; ## Usage
+;; **Inside-Out** is a fun tool for making interactive forms. It introduces a new, minimal syntax for
+;; defining a "target" data structure that contains variables, which can be handed off to a UI
+;; to be filled in. The form's "output" is computed from its fields and can take any shape.
+
+;; Here is a minimal example (try typing into the input):
+
+(cljs
+ (with-form [!person {:person/name ?name}]
+   [:input.border.p-3.mt-2
+    {:value @?name
+     :on-change #(reset! ?name (.. % -target -value))
+     :placeholder "Name"}]
+   [:pre (str @!person)]))
+
+;; What do we see above?
+;; 1. `with-form` creates a new "form" called `!person`.
+;; 2. The shape of this form is `{:person/name ?name}`. This is what we "get back" when we deref the form.
+;; 3. The form has one field, `?name`, which behaves like an atom. Every symbol that starts with `?` will be a field.
+
+;; A form can take any shape, and the same field can be used more than once. Here we create a Datomic transaction:
+
+(with-form [form [[:db/add 1 :person/pet ?pet-id]
+                  [:db/add ?pet-id :pet/name ?pet-name]]]
+  (reset! ?pet-id 2)
+  (reset! ?pet-name "Fido")
+  @form)
+
+;; Fields do not have to map 1:1 to "locations" in the form. This is what makes Inside-Out different other, common
+;; approaches which which rely on concrete "paths" or "cursors" into a data structure.
+
+(with-form [cars (take ?number (repeat "🚙"))
+            :init {?number 3}]
+  @cars)
+
+;; Interactive example:
+
+(cljs
+ (with-form [cars (take ?number (repeat "🚙"))
+             :init {?number 3}]
+   [:div
+    [:input {:type "range" :min "1" :max "10"
+             :value @?number
+             :on-change (fn [e] (->> e .-target .-value js/parseInt (reset! ?number)))}]
+    (str " " @?number " ")
+    (str/join @cars)]))
+
+;; ## Installation & Usage
 ;;
 ;; ```clj
 ;; ;; deps
@@ -45,108 +69,40 @@
 ;;   (:require [inside-out.forms.reagent :refer [with-form]]
 ;;             [inside-out.forms :as forms]))
 ;;```
-
-;; ## Quick Example
-
-(with-form [contact-info {:name ?name}]
-  (reset! ?name "Peter Rabbit")
-  @contact-info)
-
-;; What do we see here?
 ;;
-;; 1. `with-form` creates a new "form" called `contact-info`.
-;; 1. The shape of this form is `{:name ?name}`. This is what we "get back" when we deref the form,
-;;    eg. `@contact-info`.
-;; 1. The form has one field, `?name`. Every symbol that starts with `?` will become a field.
-;;    We `@deref` and `reset!` fields to read/write them.
+
+;; ## Metadata
 ;;
-;; Let's make this interactive with a text `:input`.
+;; Inside-out has a metadata system to encourage data-driven design while handling common concerns like validation.
 
-(show-cljs
-  (reagent-form [contact-info {:person/name ?name}]
+;; Initial values can be supplied via `:init` metadata.
 
-   [:div
-    [:input.border.p-3
-     {:value @?name
-      :on-change (fn [event] (reset! ?name (.. event -target -value)))
-      :placeholder "Your name:"}]
-    [:pre (str @contact-info)]]))
 
-;; Type into the input and see how the form's value updates.
 
-;; Fields like `?name` come from the "inside" of the form, but are lifted "out" into scope
-;; so that you can use them in your UI. This is where the "Inside-Out" name comes from.
+;; There are three ways to specify metadata:
 
-;; In ClojureScript, `with-form` uses Reagent's `with-let` so that our form survives re-render.
-
-;; A form can take any shape, and the same field can be used more than once.
-
-(with-form [form [[:db/add 1 :person/pet ?pet-id]
-                  [:db/add ?pet-id :pet/name ?pet-name]]]
-  (reset! ?pet-id 2)
-  (reset! ?pet-name "Fido")
-  @form)
-
-;; Initial values can be supplied via `:init` metadata. Add metadata by wrapping
-;; the field in a list, with key-value pairs.
+;; (1) Inline, by wrapping the field in a list: `(?name :init "Peter")`
 
 (with-form [contact-info {:name (?name :init "Peter")}]
   @contact-info)
 
-;; Or, add metadata as options after the form.
+;; (2) Add metadata keys after the form:
 
 (with-form [foo (str ?first-name " " ?last-name)
             :init {?first-name "Peter"
                    ?last-name "Rabbit"}]
   @foo)
 
-;; Separating the form from field metadata can help keep the form's structure clean and readable.
+;; (3) Add a `:meta` map after the form:
 
-;; ## A form's shape
-;;
-;; A form can be any expression, so fields do not have to map 1:1 to "locations" in the form.
-
-(with-form [cars (take ?number (repeat "🚙"))
-            :init {?number 3}]
-  @cars)
-
-;; Interactive example:
-
-(show-cljs
- (reagent-form [cars (take ?number (repeat "🚙"))
-                :init {?number 3}]
-   [:div
-    [:input {:type "range" :min "1" :max "10"
-             :value @?number
-             :on-change (fn [e] (->> e .-target .-value js/parseInt (reset! ?number)))}]
-    (str " " @?number " ")
-    (str/join @cars)]))
-
-;; This is quite different from the common approach of giving each field a "path" or "cursor"
-;; into an atom, which requires the shape of the form to be static.
-
-;; ## Metadata
-
-;; A "field" is not just a piece of data, it's also information about the data itself _(is it valid?)_
-;; and how it should be represented to a person _(what is it called?)_. We call this "metadata" and
-;; have a few ways of providing it.
-
-;; 1. Inline, by wrapping the field in a list: `(?name :init "Peter")`
-;; 2. Adding metadata keys after the form.
-;;    The value can be a map of `{?field <value>}`,
-;;    or a vector of `[?field1, ?field2]` (which sets each value to `true`).
-;; 3. Adding a `:meta` option, of the shape `{?field {:meta-key <meta-value}}`
-;;
-;; Examples:
-
-(with-form [form {:name ?name
-                  :email ?email}
-            :init {?name "Peter"}
-            :required [?email ?name] ;; equivalent to :required {?email true ?name true}
-            :meta {?email {:init "Rabbit"}}]
-  (:required ?email))
+(with-form [!person {:name ?name}
+            :meta {?name {:init "Cottontail"}}]
+  @!person)
 
 ;; We can read metadata by looking up a key on a field, as seen above in `(:required ?email)`.
+
+(with-form [form {:name (?name :required true)}]
+  (:required ?name))
 
 ;; ### Attribute Metadata
 
@@ -184,7 +140,7 @@
 ;; `inside-out.forms/global-meta`.
 
 ;; in ClojureScript, we would `set!` the var during app initialization:
-(show-cljs
+(cljs
 
  ;; inside your app's initialization code
  (forms/set-global-meta! {:person/name {:field/label "Your name"}})
@@ -193,8 +149,8 @@
 
 ;; Now it is available globally:
 
-(show-cljs
- (reagent-form [form [[:db/add 1 :person/name ?name]]]
+(cljs
+ (with-form [form [[:db/add 1 :person/name ?name]]]
    (:field/label ?name)))
 
 ;; ## Validation
@@ -288,15 +244,15 @@
 ;; - `:on-blur` - computes at the moment a field is blurred
 ;;
 
-(show-cljs
- (reagent-form [form {:name ?name}
-                :validators {?name [(-> (fn [value _] (forms/message :info (str "Hello, " value)))
-                                        (forms/validator :compute-when [:focused]))]}]
+(cljs
+ (with-form [form {:name ?name}
+             :validators {?name [(-> (fn [value _] (forms/message :info (str "Hello, " value)))
+                                     (forms/validator :compute-when [:focused]))]}]
    [ui/input-text ?name]))
 
 ;; Async example
 
-(show-cljs
+(cljs
  (def check-domain
    (-> (fn [value _]
          (p/do (p/delay 200)
@@ -309,8 +265,8 @@
 
 ;; forms/try-submit+ waits for any async validation to finish before continuing
 
-(show-cljs
- (reagent-form [form {:domain (?domain :validators [check-domain])}]
+(cljs
+ (with-form [form {:domain (?domain :validators [check-domain])}]
    [:form {:on-submit (fn [^js e]
                         (.preventDefault e)
                         (forms/try-submit+ form (prn :submitting @form)))}
@@ -327,7 +283,7 @@
 ;; A field is considered "touched" if a user has already interacted with it, or if its parent
 ;; form is touched (we "touch" a form itself when a user tries to submit it).
 
-(show-cljs
+(cljs
  (defn managed-text-input
    "A text-input element that reads metadata from a ?field to display appropriately"
    [?field attrs]
@@ -351,10 +307,10 @@
 ;; Example with validation. `?name` is not required, so the field is valid until
 ;; the user starts typing.
 
-(show-cljs
- (reagent-form [form [[:db/add 1 :person/name ?name]]
-                :meta {?name {:label "Your full name"
-                              :validators [(forms/min-length 3)]}}]
+(cljs
+ (with-form [form [[:db/add 1 :person/name ?name]]
+             :meta {?name {:label "Your full name"
+                           :validators [(forms/min-length 3)]}}]
 
    [:form
     [managed-text-input ?name]
@@ -399,12 +355,12 @@
 
 ;; Interactive example:
 
-(show-cljs
- (reagent-form [form [[:db/add 1 :person/pets
-                       ;; define a plural field by adding a :many key to the field.
-                       ;; it should contain a "template" for each item in the list.
-                       (?pets :many {:pet/id ?id
-                                     :pet/name (?name :init "Fido")})]]]
+(cljs
+ (with-form [form [[:db/add 1 :person/pets
+                    ;; define a plural field by adding a :many key to the field.
+                    ;; it should contain a "template" for each item in the list.
+                    (?pets :many {:pet/id ?id
+                                  :pet/name (?name :init "Fido")})]]]
 
    [:div
     [ui/show-code (str @form)]
@@ -449,12 +405,12 @@
 
 ;; The following example includes buttons that show how to handle a successful or failed response.
 
-(show-cljs
- (reagent-form [form {:name (?name :init "Sue")
-                      :accepted-terms ?accepted}
-                :form/validators [(fn [{:keys [accepted-terms]} _]
-                                    (when-not accepted-terms
-                                      "Must accept terms"))]]
+(cljs
+ (with-form [form {:name (?name :init "Sue")
+                   :accepted-terms ?accepted}
+             :form/validators [(fn [{:keys [accepted-terms]} _]
+                                 (when-not accepted-terms
+                                   "Must accept terms"))]]
    [:div
     [ui/input-text ?name]
     [:label.flex.flex-row.items-center [ui/input-checkbox ?accepted] "Accept terms?"]
@@ -478,16 +434,16 @@
 
 ;; `forms/clear!` resets a form to its initial state
 
-(show-cljs
- (reagent-form [form {:a ?a
-                      :b (?b :init "B")
-                      :c ?c
-                      :d (?d :many
-                             [?e (?f :init "F") ?nil]
-                             :init [{'?e "E"}])}
-                :meta {:a {:init "A"}
-                       ?c {:init "C"}
-                       ?e {:init "E"}}]
+(cljs
+ (with-form [form {:a ?a
+                   :b (?b :init "B")
+                   :c ?c
+                   :d (?d :many
+                          [?e (?f :init "F") ?nil]
+                          :init [{'?e "E"}])}
+             :meta {:a {:init "A"}
+                    ?c {:init "C"}
+                    ?e {:init "E"}}]
    (str (= @form
            (do (reset! ?a 1)
                (reset! ?b 2)
@@ -537,21 +493,21 @@
 
 ;; Conditionally validating fields
 
-(show-cljs
- (reagent-form [!form (merge {:type (?type :init :text)}
-                             (case ?type
-                               :text {:content ?text}
-                               :image-url {:image-url ?image-url}))
-                :required [?type]
-                :validators {?type #{:text :image-url}
-                             ?text (fn [v {:syms [?type]}]
-                                     (when (and (= @?type :text)
-                                                (not (string? v)))
-                                       "Must be a string"))
-                             ?image-url (fn [v {:syms [?type]}]
-                                          (when (and (= @?type :image-url)
-                                                     (not (some-> v (str/starts-with? "https://"))))
-                                            "Must be a secure URL beginning with https://"))}]
+(cljs
+ (with-form [!form (merge {:type (?type :init :text)}
+                          (case ?type
+                            :text {:content ?text}
+                            :image-url {:image-url ?image-url}))
+             :required [?type]
+             :validators {?type #{:text :image-url}
+                          ?text (fn [v {:syms [?type]}]
+                                  (when (and (= @?type :text)
+                                             (not (string? v)))
+                                    "Must be a string"))
+                          ?image-url (fn [v {:syms [?type]}]
+                                       (when (and (= @?type :image-url)
+                                                  (not (some-> v (str/starts-with? "https://"))))
+                                         "Must be a secure URL beginning with https://"))}]
 
    [:div.flex.flex-col.gap-2.w-64
     (str "type: " @?type)

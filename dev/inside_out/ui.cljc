@@ -1,6 +1,11 @@
 (ns inside-out.ui
-  (:require [inside-out.forms :as forms]
-            [inside-out.util :refer [merge-props]]))
+  (:require [clojure.walk :as walk]
+            [inside-out.forms :as forms]
+            [inside-out.reagent]
+            [inside-out.util :refer [merge-props]]
+            [mhuebert.clerk-cljs]
+            [re-db.reactive :as r])
+  #?(:cljs (:require-macros inside-out.ui)))
 
 (def nonbreaking-space "the &nbsp; character (for taking up space when no messages are present)"
   \u00A0)
@@ -66,3 +71,16 @@
                       attrs)]
         (when (seq messages)
           (into [:div.mt-1] (map view-message) messages))])))
+
+#?(:clj
+   (defmacro with-form [bindings & body]
+     ;; computes form inside a reactive sesson (for resource cleanup)
+     `(r/session (forms/with-form ~bindings ~@body))))
+
+#?(:clj
+   (defmacro cljs
+     ;; computes in cljs environment (browser)
+     [& body]
+     `(~'mhuebert.clerk-cljs/show-cljs
+       (do ~@(walk/postwalk #({`with-form 'inside-out.reagent/with-form
+                               'with-form 'inside-out.reagent/with-form} % %) body)))))

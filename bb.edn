@@ -1,5 +1,5 @@
 {:tasks {dev (do (shell "yarn")
-                 (shell "shadow-cljs -A:clerk watch clerk"))
+                 (shell "shadow-cljs -A:clerk clj-run dev/start"))
          dev-local (do (shell "yarn")
                        (shell "shadow-cljs -A:clerk-local server"))
          sha (let [sha (clojure.string/trim (:out (shell {:out :string} "git rev-parse HEAD")))
