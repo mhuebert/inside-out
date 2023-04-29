@@ -31,7 +31,8 @@
 ;; 2. The shape of this form is `{:person/name ?name}`. This is what we "get back" when we deref the form.
 ;; 3. The form has one field, `?name`, which behaves like an atom. Every symbol that starts with `?` will be a field.
 
-;; A form can take any shape, and the same field can be used more than once. Here we create a Datomic transaction:
+;; A form can take any shape. Typically, it will be a data structure that's handed off to another system.
+;; For example, here's a Datomic transaction:
 
 (with-form [form [[:db/add 1 :person/pet ?pet-id]
                   [:db/add ?pet-id :pet/name ?pet-name]]]
@@ -39,8 +40,9 @@
   (reset! ?pet-name "Fido")
   @form)
 
-;; Fields do not have to map 1:1 to "locations" in the form. This is what makes Inside-Out different other, common
-;; approaches which which rely on concrete "paths" or "cursors" into a data structure.
+;; Fields do not have to map 1:1 to "locations" in the form, and they can appear more than once.
+;; Unlike common approaches that rely on concrete "paths" or "cursors" into a static data structure,
+;; inside-out forms are arbitrary _expressions_ that are computed to produce the form's output.
 
 (with-form [cars (take ?number (repeat "🚙"))
             :init {?number 3}]
@@ -73,15 +75,12 @@
 
 ;; ## Metadata
 ;;
-;; Inside-out has a metadata system to encourage data-driven design while handling common concerns like validation.
-
-;; Initial values can be supplied via `:init` metadata.
-
-
+;; Inside-out supports metadata to handle common concerns like validation.
 
 ;; There are three ways to specify metadata:
 
-;; (1) Inline, by wrapping the field in a list: `(?name :init "Peter")`
+;; (1) Inline, by wrapping the field in a list: `(?name :init "Peter")`.
+;; Initial values can be supplied via `:init` metadata.
 
 (with-form [contact-info {:name (?name :init "Peter")}]
   @contact-info)
@@ -104,12 +103,10 @@
 (with-form [form {:name (?name :required true)}]
   (:required ?name))
 
-;; ### Attribute Metadata
-
-;; Let us be data-driven!
+;; ### Inferring attribute metadata
 ;;
-;; Metadata can be defined for attributes like `:person/name`, which are _inferred_
-;; for fields based on their position in a data structure:
+;; We can define metadata for _attributes_ like `:person/name`, which are then _inferred_
+;; from the shape of a data structure:
 ;; 1. when a field is in the value position in a map, eg. `{<attribute> ?field}`,
 ;; 2. when a field is in the value position of a `:db/add` vector:
 ;;    `[:db/add <id> <attribute> ?field]`
@@ -142,7 +139,7 @@
 ;; in ClojureScript, we would `set!` the var during app initialization:
 (cljs
 
- ;; inside your app's initialization code
+ ;; inside your app's initialization code - can be a map or a function.
  (forms/set-global-meta! {:person/name {:field/label "Your name"}})
 
  [:pre (str inside-out.forms/global-meta)])
@@ -159,10 +156,11 @@
 ;; a field's "messages" via `(forms/messages ?field)`.
 
 (with-form [form [[:db/add 1 :person/name ?name]]
-            :meta {?name {:validators [(forms/min-length 3)]}}]
+            :validators {?name  [(forms/min-length 3)]}]
 
   (reset! ?name "ma")
-  (forms/messages ?name))
+  (->> (forms/messages ?name)
+       (map :content)))
 
 ;; Each validator is a function which is passed the field's current value and a map of
 ;; the other fields in the form (which must be dereferenced to read their values):
@@ -179,7 +177,8 @@
                    :child/age (?child-age :validators [validate-child-age])}]]
   (reset! ?parent-age 10)
   (reset! ?child-age 20)
-  (forms/messages ?child-age))
+  (->> (forms/messages ?child-age)
+       (map :content)))
 
 
 ;; Validators for the form itself can be passed using a :form/validators option
