@@ -10,7 +10,7 @@
  ;; for compiling clerk notebook
  {:clerk {:extra-paths ["dev"]
           :extra-deps {io.github.mhuebert/clerk-cljs
-                       {:git/sha "3cf47f811042fa131c75ba8940260846d8b6d75f"}}}
+                       {:git/sha "61a3182c747e8ed3d413744d8bfbdc4a42107ba1"}}}
 
   ;; for working on Clerk
   :clerk-local {:extra-paths ["dev"]
