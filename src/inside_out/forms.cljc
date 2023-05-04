@@ -296,15 +296,16 @@
   ;; a form's messages are computed in a reaction
   ;; (to only do the work when dependent values change)
   (let [metadata (.-metadata field)
-        astate (r/atom {})
+        vstate (r/atom {})
         validators (->> (:validators metadata)
                         ensure-vector
                         (concat (when (:required metadata) [:required]))
                         (replace {:required (:required @!validators)})
                         (mapv init-validator))
-        messages-fn #(do @astate
-                         (compute-messages @field validators (assoc (field-context field)
-                                                               :validator/!state astate)))]
+        messages-fn #(do @vstate
+                         (-> (compute-messages @field validators (assoc (field-context field)
+                                                                   :validator/!state vstate))
+                             (into (:remote-messages @(!meta field)))))]
     (r/make-reaction messages-fn)))
 
 (defn- make-field
@@ -422,10 +423,9 @@
 (defn messages
   "Returns validator messages for a field/form"
   [field & {:keys [deep]}]
-  (concat (:remote-messages field)
-          (if deep
-            (mapcat computed-messages (cons field (descendants field)))
-            (computed-messages field))))
+  (if deep
+    (mapcat computed-messages (cons field (descendants field)))
+    (computed-messages field)))
 
 (defn show-message?
   "Returns true if message should be shown, based on :visibility of message
@@ -506,37 +506,66 @@
               (stop!))))))))
 
 (defn clear-remote-messages! [!form]
-  (swap! (!meta !form) dissoc :remote-messages))
+  (doseq [field (cons !form (descendants !form))]
+    (swap! (!meta field) dissoc :remote-messages)))
+
+(defn set-path-messages!
+  "Given a map of {<path> [...messages]}, sets :remote-messages on fields
+   at <path> in form. Messages that cannot be unambiguously assigned to a field
+    based on its :attribute are assigned to the form itself."
+  [!form path-messages]
+  (let [fields-by-attr (->> (group-by :attribute (descendants !form))
+                            (reduce-kv (fn [m attr fields]
+                                         (if (= 1 (count fields))
+                                           (assoc m attr (first fields))
+                                           m)) {}))]
+    (doseq [[path messages] path-messages
+            :let [field (fields-by-attr (last path) !form)]]
+      (if field
+        (swap! (!meta field) assoc :remote-messages messages)
+        (swap! (!meta !form) assoc :remote-messages (map #(str % " at " path) messages)))))
+  !form)
+
+(comment
+ (-> (inside-out.forms/form {:X ?x :Y {:z ?z :Q ?q}})
+     (set-path-messages! {[:X] ["X"]
+                          [:Y] ["in root"]
+                          [:X :Q] ["Q"]})
+     (messages :deep false)))
+
+(defn parse-remote-messages
+  ;; return a map of {<path> [...messages]}
+  [result]
+  (cond
+    (::messages-by-path result) (update-vals (::messages-by-path result)
+                                             wrap-messages)
+    ;; preferred case: a single message, a map, is returned
+    (:content result) {[] (wrap-messages result)}
+
+    ;; legacy api
+    (:messages result) {[] (wrap-messages (:messages result))}
+    (:error result) {[] (wrap-messages :error (:error result))}
+    (:invalid result) {[] (wrap-messages :invalid (:invalid result))}
+    (:info result) {[] (wrap-messages :info (:info result))}))
 
 (defn watch-promise
   "Wraps a promise to store :loading? and :remote-messages as reactive metadata on `form`.
 
-
    If the promise resolves to a message (a map containing :content), it will be set to the
    form's :remote-messages, which are included in `(messages form)`."
-  [form promise]
+  [!form promise]
   #?(:cljs
-     (let [meta-atom (!meta form)
+     (let [meta-atom (!meta !form)
            complete! (fn [result]
-                       (swap-> meta-atom
-                               (dissoc :loading?)
-                               (assoc :remote-messages
-                                      (cond
-                                        ;; preferred case: a single message, a map, is returned
-                                        (:content result) (wrap-messages result)
-
-                                        ;; legacy api
-                                        (:messages result) (wrap-messages (:messages result))
-                                        (:error result) (wrap-messages :error (:error result))
-                                        (:invalid result) (wrap-messages :invalid (:invalid result))
-                                        (:info result) (wrap-messages :info (:info result)))))
+                       (swap! meta-atom dissoc :loading?)
+                       (set-path-messages! !form (parse-remote-messages result))
                        result)]
-       (swap-> meta-atom
-               (assoc :loading? true)
-               (dissoc :remote-messages))
+       (clear-remote-messages! !form)
+       (swap! meta-atom assoc :loading? true)
        (p/catch
         (p/-> promise complete!)
-        (fn [e] (complete! {:error (ex-message e)}))))
+        (fn [e] (complete! (or (util/guard (ex-data e) ::messages-by-path)
+                               {:error (ex-message e)})))))
      :clj promise))
 
 (defn clear!
@@ -594,7 +623,7 @@
      :clj (valid? form)))
 
 (defmacro try-submit+
-  "[async] Evaluates `submit-expr` if valid?+ returns true. The form's :remove-messages are set to
+  "[async] Evaluates `submit-expr` if valid?+ returns true. The form's :remote-messages are set to
    the return value of submit-expr (if it is a message) or nil."
   [form submit-expr]
   (if (:ns &env)
