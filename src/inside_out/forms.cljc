@@ -165,8 +165,8 @@
                                     (schedule! value context)
                                     :else (r/silently (eval! value context)))
                             result (:result (get-vstate :debounce f context))]
-                        (if (and @next-args (not (p/promise? result)))
-                          (-> result wrap-messages (conj (message :in-progress)))
+                        (if @next-args
+                          (message :in-progress)
                           result)))
                     (meta f))))))
 
