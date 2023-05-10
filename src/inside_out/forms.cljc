@@ -305,7 +305,8 @@
         messages-fn #(do @vstate
                          (-> (compute-messages @field validators (assoc (field-context field)
                                                                    :validator/!state vstate))
-                             (into (:remote-messages @(!meta field)))))]
+                             (into (when-let [{:keys [for-value messages]} (:remote-messages @(!meta field))]
+                                     (when (= for-value @field) messages)) )))]
     (r/make-reaction messages-fn)))
 
 (defn- make-field
@@ -520,10 +521,10 @@
                                            (assoc m attr (first fields))
                                            m)) {}))]
     (doseq [[path messages] path-messages
-            :let [field (fields-by-attr (last path) !form)]]
-      (if field
-        (swap! (!meta field) assoc :remote-messages messages)
-        (swap! (!meta !form) assoc :remote-messages (map #(str % " at " path) messages)))))
+            :let [!field (fields-by-attr (last path) !form)]]
+      (if !field
+        (swap! (!meta !field) assoc :remote-messages {:for-value @!field :messages messages})
+        (swap! (!meta !form) assoc :remote-messages {:for-value @!form :messages (map #(str % " at " path) messages)}))))
   !form)
 
 (comment
@@ -629,7 +630,7 @@
   (if (:ns &env)
     `(watch-promise ~form
        (-> (valid?+ ~form)
-           (.then (fn [res#] (when res# ~submit-expr)))))
+           (.then (fn [valid#] (when valid# ~submit-expr)))))
     `(do (touch! ~form)
          (when (submittable? ~form) ~submit-expr))))
 
