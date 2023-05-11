@@ -589,7 +589,8 @@
   ([?field {:as options :keys [parse-value]
             :or {parse-value #(util/guard % (partial not= ""))}}]
    (fn [e]
-     (reset! ?field (parse-value #?(:cljs (.. ^js e -target -value)))))))
+     (reset! ?field (parse-value #?(:cljs (or (.. ^js e -target -value)
+                                              (.. ^js e -target -checked))))))))
 
 (defn focus-handler
   [?field]
