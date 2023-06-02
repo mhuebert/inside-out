@@ -211,27 +211,34 @@
                       (let [~@(mapcat (fn [sym] [(unquote-it sym) `(get ~bindings '~sym)]) (keys fields))]
                         ~return)))
          ;; all other fields are assumed to be <key> {?field <value>}
-         fields (reduce-kv
-                 (fn [fields meta-k values]
-                   (cond (map? values)
-                         (reduce-kv (fn [fields sym value]
-                                      (cond-> fields
-                                              (fields sym)
-                                              (assoc-in [sym meta-k] value))) fields values)
-                         (vector? values)
-                         (reduce (fn [fields sym]
-                                   (cond-> fields
-                                           (fields sym)
-                                           (assoc-in [sym meta-k] true))) fields values)))
-                 fields
-                 (-> options
-                     (dissoc :meta)
-                     (dissoc-ns :form)))
+         [dynamic-metas fields] (reduce-kv
+                                  (fn [[metas fields] meta-k values]
+                                    (cond (map? values)
+                                          [metas (reduce-kv (fn [fields sym value]
+                                                              (cond-> fields
+                                                                      (fields sym)
+                                                                      (assoc-in [sym meta-k] value))) fields values)]
+                                          (vector? values)
+                                          [metas (reduce (fn [fields sym]
+                                                           (cond-> fields
+                                                                   (fields sym)
+                                                                   (assoc-in [sym meta-k] true))) fields values)]
+                                          :else [(assoc metas meta-k values) fields]))
+                                  [{} fields]
+                                  (-> options
+                                      (dissoc :meta)
+                                      (dissoc-ns :form)))
+         ;; quote literal field keys in metadata
+         meta-map (cond-> (:meta options)
+                          (map? (:meta options))
+                          (update-keys quote-field-sym))
+         ;; merge dynamic metadata
+         meta-map (if (seq dynamic-metas)
+                    `(~'inside-out.forms/merge-dynamic-metas ~meta-map ~dynamic-metas)
+                    meta-map)
          ;; handle form metadata
-         form-meta (merge {:meta (cond-> (:meta options)
-                                         (map? (:meta options))
-                                         (update-keys quote-field-sym))}
-                          (lift-ns options :form))]
+         form-meta (-> (lift-ns options :form)
+                       (assoc :meta meta-map))]
      {:form/fields fields
       :form/return return
       :form/compute compute
