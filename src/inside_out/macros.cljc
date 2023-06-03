@@ -210,39 +210,36 @@
                    `(fn [~bindings]
                       (let [~@(mapcat (fn [sym] [(unquote-it sym) `(get ~bindings '~sym)]) (keys fields))]
                         ~return)))
-         ;; all other fields are assumed to be <key> {?field <value>}
-         [dynamic-metas fields] (reduce-kv
-                                  (fn [[metas fields] meta-k values]
-                                    (cond (map? values)
-                                          [metas (reduce-kv (fn [fields sym value]
-                                                              (cond-> fields
-                                                                      (fields sym)
-                                                                      (assoc-in [sym meta-k] value))) fields values)]
-                                          (vector? values)
-                                          [metas (reduce (fn [fields sym]
-                                                           (cond-> fields
-                                                                   (fields sym)
-                                                                   (assoc-in [sym meta-k] true))) fields values)]
-                                          :else [(assoc metas meta-k values) fields]))
-                                  [{} fields]
-                                  (-> options
-                                      (dissoc :meta)
-                                      (dissoc-ns :form)))
-         ;; quote literal field keys in metadata
-         meta-map (cond-> (:meta options)
-                          (map? (:meta options))
-                          (update-keys quote-field-sym))
-         ;; merge dynamic metadata
-         meta-map (if (seq dynamic-metas)
-                    `(~'inside-out.forms/merge-dynamic-metas ~meta-map ~dynamic-metas)
-                    meta-map)
-         ;; handle form metadata
+         ;; {:validators {?field X}}
+         meta-by-key (-> options
+                         (dissoc :meta)
+                         (dissoc-ns :form)
+                         (update-vals #(if (vector? %)
+                                         (zipmap % (repeat true))
+                                         %))
+                         (update-vals #(if (map? %)
+                                         (update-keys % quote-field-sym)
+                                         %)))
+         ;; {?field {:validators X}}
+         meta-by-field (cond-> (:meta options)
+                               (map? (:meta options))
+                               (update-keys quote-field-sym))
          form-meta (-> (lift-ns options :form)
-                       (assoc :meta meta-map))]
+                       (assoc :meta `(~'inside-out.forms/merge-metas ~meta-by-field ~meta-by-key)))]
      {:form/fields fields
       :form/return return
       :form/compute compute
       :form/meta form-meta})))
+
+(comment
+  (analyze-form '{:a ?a :b ?b}
+                '{:required [?a ?b]
+                  :meta META
+                  :whatever WHATEVER
+                  :blah {?a true ?b false}})
+  (update-vals '{:something [?f1 ?f2]} #(if (vector? %)
+                                          (zipmap % (repeat true))
+                                          %)))
 
 (comment
 

@@ -309,11 +309,11 @@
                                      (when (= for-value @field) messages)) )))]
     (r/make-reaction messages-fn)))
 
-(defn merge-dynamic-metas [m metas]
-  ;; given a map of {<meta-key>, {<field-k> <meta-value>}}}
+(defn merge-metas [meta-by-field meta-by-key]
+  ;; returns map of {?field {:key <value?}} (meta-by-field)
   (reduce-kv (fn [m meta-k values]
                (reduce-kv (fn [m field-k meta-v]
-                            (assoc-in m [field-k meta-k] meta-v)) m values)) m metas))
+                            (assoc-in m [field-k meta-k] meta-v)) m values)) meta-by-field meta-by-key))
 
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]

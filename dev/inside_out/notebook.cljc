@@ -103,7 +103,7 @@
 (with-form [form {:name (?name :required true)}]
   (:required ?name))
 
-;; ### Inferring attribute metadata
+;; ### Attribute metadata
 ;;
 ;; We can define metadata for _attributes_ like `:person/name`, which are then _inferred_
 ;; from the shape of a data structure:
@@ -131,6 +131,12 @@
 (with-form [form [[:db/add 1 :person/name ?name]]
             :meta app-attributes]
   (:label ?name))
+
+;; To supply initial values for keys in a map (via attribute inference):
+
+(with-form [!form {:a ?a :b ?b}
+            :init {:a 1 :b 2}]
+  @!form)
 
 ;; In practice, you'll probably want to define attribute metadata once in your app and re-use it
 ;; everywhere. To support this use-case, fields inherit from a globally defined var
