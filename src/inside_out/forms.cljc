@@ -153,15 +153,15 @@
                          (vreset! next-args [value ctx])
                          (some-> @next-timeout js/clearTimeout)
                          (vreset! next-timeout (js/setTimeout
-                                                #(apply eval! @next-args)
-                                                ms)))]
+                                                 #(apply eval! @next-args)
+                                                 ms)))]
          (with-meta (fn [value context]
                       (let [vstate (get-vstate :debounce f context)
                             diff (- (js/Date.now) @last-time)
                             _ (cond (valid-vstate? value vstate) nil ;; value hasn't changed, no-op
                                     (or
-                                     @next-args ;; already scheduled, update timer
-                                     (< diff ms)) ;; still within debounce window, update timer
+                                      @next-args            ;; already scheduled, update timer
+                                      (< diff ms))          ;; still within debounce window, update timer
                                     (schedule! value context)
                                     :else (r/silently (eval! value context)))
                             result (:result (get-vstate :debounce f context))]
@@ -199,20 +199,20 @@
     result
     (do (when (not= result (:promise (get-vstate :async f context))) ;; in case we've already handled this promise
           (r/silently
-           (set-vstate :async f context {:for-value value
-                                         :promise result
-                                         :in-progress (message :in-progress)}))
+            (set-vstate :async f context {:for-value value
+                                          :promise result
+                                          :in-progress (message :in-progress)}))
           (-> (p/let [result result]
                 (when (valid-vstate? value (get-vstate :async f context))
                   (set-vstate :async f context {:for-value value
                                                 :promise result
                                                 :result result})))
               (p/catch
-               (fn [error]
-                 (when (valid-vstate? value (get-vstate :async f context))
-                   (set-vstate :async f context {:for-value value
-                                                 :promise result
-                                                 :error (message :error (ex-message error))}))))))
+                (fn [error]
+                  (when (valid-vstate? value (get-vstate :async f context))
+                    (set-vstate :async f context {:for-value value
+                                                  :promise result
+                                                  :error (message :error (ex-message error))}))))))
         (message :in-progress))))
 
 (defn async-result
@@ -222,15 +222,15 @@
 
 (defn compute-validator [f value context]
   (wrap-messages
-   #?(:clj (f value context)
-      :cljs
-      ;; if we have a valid async result, show it, otherwise compute the result
-      ;; (we need to do this check so that side-effecting async validators don't
-      ;;  re-run while in progress)
-      (if (valid-vstate? value (get-vstate :async f context))
-        (async-result f context)
-        (-> (f value context)
-            (handle-promise-result f value context))))))
+    #?(:clj (f value context)
+       :cljs
+       ;; if we have a valid async result, show it, otherwise compute the result
+       ;; (we need to do this check so that side-effecting async validators don't
+       ;;  re-run while in progress)
+       (if (valid-vstate? value (get-vstate :async f context))
+         (async-result f context)
+         (-> (f value context)
+             (handle-promise-result f value context))))))
 
 (defn is [pred message]
   (fn [v ctx]
@@ -306,7 +306,7 @@
                          (-> (compute-messages @field validators (assoc (field-context field)
                                                                    :validator/!state vstate))
                              (into (when-let [{:keys [for-value messages]} (:remote-messages @(!meta field))]
-                                     (when (= for-value @field) messages)) )))]
+                                     (when (= for-value @field) messages)))))]
     (r/make-reaction messages-fn)))
 
 (defn merge-metas [meta-by-field meta-by-key]
@@ -338,6 +338,13 @@
                        (atom {}))]
     (swap! (!meta field) assoc :!messages (messages-reaction field))
     field))
+
+(defn field
+  [& {:as field-meta}]
+  (make-field nil nil field-meta))
+
+(comment
+  (field :attribute :entity/domain))
 
 (declare make-binding!)
 
@@ -417,8 +424,8 @@
    (->> validators
         (into []
               (comp
-               (mapcat #(compute-validator % value context))
-               (map #(assoc % :sym sym)))))))
+                (mapcat #(compute-validator % value context))
+                (map #(assoc % :sym sym)))))))
 
 (defn descendants [?field]
   (let [ch (vals @(!children ?field))]
@@ -499,18 +506,18 @@
      ^js [^Field form]
      (let [watch-key (gensym "wait-for-async-validators")]
        (js/Promise.
-        (fn [resolve reject]
-          (let [waiting? (r/reaction! (in-progress? form))
-                stop! (fn []
-                        (remove-watch waiting? watch-key)
-                        (r/dispose! waiting?)
-                        (resolve))]
-            (if @waiting?
-              (add-watch waiting? watch-key
-                         (fn [_ _ _ is-waiting?]
-                           (when-not is-waiting?
-                             (stop!))))
-              (stop!))))))))
+         (fn [resolve reject]
+           (let [waiting? (r/reaction! (in-progress? form))
+                 stop! (fn []
+                         (remove-watch waiting? watch-key)
+                         (r/dispose! waiting?)
+                         (resolve))]
+             (if @waiting?
+               (add-watch waiting? watch-key
+                          (fn [_ _ _ is-waiting?]
+                            (when-not is-waiting?
+                              (stop!))))
+               (stop!))))))))
 
 (defn clear-remote-messages! [!form]
   (doseq [field (cons !form (descendants !form))]
@@ -534,11 +541,11 @@
   !form)
 
 (comment
- (-> (inside-out.forms/form {:X ?x :Y {:z ?z :Q ?q}})
-     (set-path-messages! {[:X] ["X"]
-                          [:Y] ["in root"]
-                          [:X :Q] ["Q"]})
-     (messages :deep false)))
+  (-> (inside-out.forms/form {:X ?x :Y {:z ?z :Q ?q}})
+      (set-path-messages! {[:X] ["X"]
+                           [:Y] ["in root"]
+                           [:X :Q] ["Q"]})
+      (messages :deep false)))
 
 (defn parse-remote-messages
   ;; return a map of {<path> [...messages]}
@@ -570,9 +577,9 @@
        (clear-remote-messages! !form)
        (swap! meta-atom assoc :loading? true)
        (p/catch
-        (p/-> promise complete!)
-        (fn [e] (complete! (or (util/guard (ex-data e) ::messages-by-path)
-                               {:error (ex-message e)})))))
+         (p/-> promise complete!)
+         (fn [e] (complete! (or (util/guard (ex-data e) ::messages-by-path)
+                                {:error (ex-message e)})))))
      :clj promise))
 
 (defn clear!
@@ -586,8 +593,8 @@
   field)
 
 (comment
- (compute-messages "abc" [required (max-length 2)] nil)
- (compute-messages nil [required (max-length 2)] nil))
+  (compute-messages "abc" [required (max-length 2)] nil)
+  (compute-messages nil [required (max-length 2)] nil))
 
 (defn change-handler
   "Returns a callback which resets a ref to target.value on change"
@@ -617,8 +624,8 @@
   (macros/with-form* &form &env {} bindings body))
 
 (comment
- ;; change-handler can be generated from cursor
- {:on-change (change-handler ?last)})
+  ;; change-handler can be generated from cursor
+  {:on-change (change-handler ?last)})
 
 (defn valid?+
   "[async] Touches form, waits for async validators to complete, returns true if form is valid."
@@ -643,7 +650,7 @@
 (defmacro for-many [[as ?field] expr]
   (let [bindings (-> &env (find ?field) key meta :many/bindings)]
     `(doall
-      (for [field# ~?field]
-        (let [{:syms ~(mapv second bindings)} field#
-              ~as field#]
-          ~expr)))))
+       (for [field# ~?field]
+         (let [{:syms ~(mapv second bindings)} field#
+               ~as field#]
+           ~expr)))))
