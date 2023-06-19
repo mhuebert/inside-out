@@ -317,7 +317,6 @@
 
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]
-  {:pre [sym]}
   ;; "inherit" metadata from ancestors that contain a :meta option with
   ;; a matching symbol or attribute.
   (let [inherited-meta (->> (iterate inside-out.forms/parent parent)
