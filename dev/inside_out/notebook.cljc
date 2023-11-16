@@ -514,7 +514,7 @@
                                                   (not (some-> v (str/starts-with? "https://"))))
                                          "Must be a secure URL beginning with https://"))}]
 
-   [:div.flex.flex-col.gap-2.w-64
+   [:div.flex-v.gap-2.w-64
     (str "type: " @?type)
     [:button.p-1.bg-blue-700.text-white.rounded.mb-1
      {:on-click #(swap! ?type {:text :image-url
