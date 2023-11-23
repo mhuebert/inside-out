@@ -3,6 +3,7 @@
   (:refer-clojure :exclude [assoc-in descendants update-vals])
   (:require [clojure.core :as core]
             [clojure.string :as str]
+            [clojure.set :as set]
             [inside-out.macros :as macros :refer [swap->]]
             [inside-out.util :as util :refer [assoc-in update-vals]]
             [promesa.core :as p]
@@ -141,29 +142,29 @@
      :cljs
      (if (nil? ms)
        f
-       (let [last-time (volatile! (- (js/Date.now) ms 1))
-             next-args (volatile! nil)
+       (let [last-time    (volatile! (- (js/Date.now) ms 1))
+             next-args    (volatile! nil)
              next-timeout (volatile! nil)
-             eval! (fn [value context]
-                     (vreset! next-args nil)
-                     (vreset! last-time (js/Date.now))
-                     (set-vstate :debounce f context {:result (f value context)
-                                                      :for-value value}))
-             schedule! (fn [value ctx]
-                         (vreset! next-args [value ctx])
-                         (some-> @next-timeout js/clearTimeout)
-                         (vreset! next-timeout (js/setTimeout
-                                                 #(apply eval! @next-args)
-                                                 ms)))]
+             eval!        (fn [value context]
+                            (vreset! next-args nil)
+                            (vreset! last-time (js/Date.now))
+                            (set-vstate :debounce f context {:result    (f value context)
+                                                             :for-value value}))
+             schedule!    (fn [value ctx]
+                            (vreset! next-args [value ctx])
+                            (some-> @next-timeout js/clearTimeout)
+                            (vreset! next-timeout (js/setTimeout
+                                                    #(apply eval! @next-args)
+                                                    ms)))]
          (with-meta (fn [value context]
                       (let [vstate (get-vstate :debounce f context)
-                            diff (- (js/Date.now) @last-time)
-                            _ (cond (valid-vstate? value vstate) nil ;; value hasn't changed, no-op
-                                    (or
-                                      @next-args            ;; already scheduled, update timer
-                                      (< diff ms))          ;; still within debounce window, update timer
-                                    (schedule! value context)
-                                    :else (r/silently (eval! value context)))
+                            diff   (- (js/Date.now) @last-time)
+                            _      (cond (valid-vstate? value vstate) nil ;; value hasn't changed, no-op
+                                         (or
+                                           @next-args       ;; already scheduled, update timer
+                                           (< diff ms))     ;; still within debounce window, update timer
+                                         (schedule! value context)
+                                         :else (r/silently (eval! value context)))
                             result (:result (get-vstate :debounce f context))]
                         (if @next-args
                           (message :in-progress)
@@ -199,20 +200,20 @@
     result
     (do (when (not= result (:promise (get-vstate :async f context))) ;; in case we've already handled this promise
           (r/silently
-            (set-vstate :async f context {:for-value value
-                                          :promise result
+            (set-vstate :async f context {:for-value   value
+                                          :promise     result
                                           :in-progress (message :in-progress)}))
           (-> (p/let [result result]
                 (when (valid-vstate? value (get-vstate :async f context))
                   (set-vstate :async f context {:for-value value
-                                                :promise result
-                                                :result result})))
+                                                :promise   result
+                                                :result    result})))
               (p/catch
                 (fn [error]
                   (when (valid-vstate? value (get-vstate :async f context))
                     (set-vstate :async f context {:for-value value
-                                                  :promise result
-                                                  :error (message :error (ex-message error))}))))))
+                                                  :promise   result
+                                                  :error     (message :error (ex-message error))}))))))
         (message :in-progress))))
 
 (defn async-result
@@ -271,7 +272,7 @@
   [i]
   (fn [value _]
     (when (and value (> (count value) i))
-      {:type :invalid
+      {:type    :invalid
        :content (str "Too long (max " i " chars)")})))
 
 (defn min-length
@@ -279,10 +280,10 @@
   [i]
   (fn [value _]
     (when (and value (< (count value) i))
-      {:type :invalid
+      {:type    :invalid
        :content (str "Too short (min " i " chars)")})))
 
-(defonce !validators (r/atom {:required required
+(defonce !validators (r/atom {:required   required
                               :max-length max-length
                               :min-length min-length}))
 
@@ -295,13 +296,13 @@
 (defn messages-reaction [^Field field]
   ;; a form's messages are computed in a reaction
   ;; (to only do the work when dependent values change)
-  (let [metadata (.-metadata field)
-        vstate (r/atom {})
-        validators (->> (:validators metadata)
-                        ensure-vector
-                        (concat (when (:required metadata) [:required]))
-                        (replace {:required (:required @!validators)})
-                        (mapv init-validator))
+  (let [metadata    (.-metadata field)
+        vstate      (r/atom {})
+        validators  (->> (:validators metadata)
+                         ensure-vector
+                         (concat (when (:required metadata) [:required]))
+                         (replace {:required (:required @!validators)})
+                         (mapv init-validator))
         messages-fn #(do @vstate
                          (-> (compute-messages @field validators (assoc (field-context field)
                                                                    :validator/!state vstate))
@@ -325,16 +326,16 @@
                             (into {}
                                   (map #(cond->> (% sym)
                                                  attribute (concat (% attribute))))))
-        metadata (merge (when global-meta
-                          (merge (global-meta sym)
-                                 (global-meta attribute)))
-                        inherited-meta meta)
-        field (->Field parent
-                       compute
-                       (r/atom (:init metadata))
-                       metadata
-                       (r/atom {})
-                       (atom {}))]
+        metadata       (merge (when global-meta
+                                (merge (global-meta sym)
+                                       (global-meta attribute)))
+                              inherited-meta meta)
+        field          (->Field parent
+                                compute
+                                (r/atom (:init metadata))
+                                metadata
+                                (r/atom {})
+                                (atom {}))]
     (swap! (!meta field) assoc :!messages (messages-reaction field))
     field))
 
@@ -374,6 +375,18 @@
                  (swap! (!children plural-field) assoc (:sym child) child)
                  (swap! (!state plural-field) conj (:sym child))
                  child)))))
+
+(defn swap-many!
+  "f should take a vector of fields and return a vector of a strict subset of the same fields"
+  [plural-field f & args]
+  (let [pv      (mapv #(get plural-field %) @(!state plural-field))
+        v       (apply f pv args)
+        _       (assert (set/subset? (set v) (set pv)) "must return a subset of fields")
+        _       (assert (vector? v) "must return a vector")
+        removed (set/difference (set pv) (set v))]
+    (reset! (!state plural-field) (mapv :sym v))
+    (swap! (!children plural-field) #(apply dissoc % (map :sym removed)))
+    plural-field))
 
 (defn remove-many! [& children]
   (doseq [{:as ?child :keys [sym]} children]
@@ -459,9 +472,9 @@
 
 (def message-order
   ;; show errors above hint
-  {:error 0
+  {:error   0
    :invalid 1
-   :hint 2})
+   :hint    2})
 
 (defn visible-messages
   "Returns messages visible for field (not recursive), or the `not-found` message"
@@ -507,10 +520,10 @@
        (js/Promise.
          (fn [resolve reject]
            (let [waiting? (r/reaction! (in-progress? form))
-                 stop! (fn []
-                         (remove-watch waiting? watch-key)
-                         (r/dispose! waiting?)
-                         (resolve))]
+                 stop!    (fn []
+                            (remove-watch waiting? watch-key)
+                            (r/dispose! waiting?)
+                            (resolve))]
              (if @waiting?
                (add-watch waiting? watch-key
                           (fn [_ _ _ is-waiting?]
@@ -541,8 +554,8 @@
 
 (comment
   (-> (inside-out.forms/form {:X ?x :Y {:z ?z :Q ?q}})
-      (set-path-messages! {[:X] ["X"]
-                           [:Y] ["in root"]
+      (set-path-messages! {[:X]    ["X"]
+                           [:Y]    ["in root"]
                            [:X :Q] ["Q"]})
       (messages :deep false)))
 
@@ -641,8 +654,8 @@
   [form submit-expr]
   (if (:ns &env)
     `(watch-promise ~form
-       (-> (valid?+ ~form)
-           (.then (fn [valid#] (when valid# ~submit-expr)))))
+                    (-> (valid?+ ~form)
+                        (.then (fn [valid#] (when valid# ~submit-expr)))))
     `(do (touch! ~form)
          (when (submittable? ~form) ~submit-expr))))
 
