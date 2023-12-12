@@ -343,9 +343,6 @@
   [& {:as field-meta}]
   (make-field nil nil field-meta))
 
-(comment
-  (field :attribute :entity/domain))
-
 (declare make-binding!)
 
 (defn add-to-parent! [child parent]
@@ -359,22 +356,38 @@
 (defn remove-binding! [child]
   (swap! (!children (parent child)) dissoc (:sym child)))
 
-(defn- make-many-child [field bindings]
-  (let [{:many/keys [compute fields]} (:many field)
-        child (make-field field compute (merge {:sym (gensym 'list-child-)}
-                                               (:child-meta field)))]
+(defn- make-many-child [?field bindings]
+  (let [{:many/keys [compute fields]} (:many ?field)
+        child (make-field ?field compute (merge {:sym (gensym 'list-child-)}
+                                                (:child-meta ?field)))]
     (doseq [[sym meta] fields
             :let [init (get bindings sym)]]
       (make-binding! child (cond-> meta (some? init) (assoc :init init))))
     child))
 
-(defn add-many! [plural-field & children]
-  (->> children
-       (mapv (fn [bindings]
-               (let [child (make-many-child plural-field bindings)]
-                 (swap! (!children plural-field) assoc (:sym child) child)
-                 (swap! (!state plural-field) conj (:sym child))
-                 child)))))
+(defn init-renames [?map-field]
+  (->> (if (:many ?map-field)
+         (-> ?map-field :many :many/fields)
+         (-> ?map-field children))
+       vals
+       (keep (fn [?field]
+               (when-let [attribute (:attribute ?field)]
+                 [attribute (:sym ?field)])))
+       (into {})))
+
+(defn rename-init [renames x]
+  (if (map? x)
+    (set/rename-keys x renames)
+    x))
+
+(defn add-many! [?plural-field & children]
+  (let [bindings (map (partial rename-init (init-renames ?plural-field)) children)]
+    (->> bindings
+         (mapv (fn [bindings]
+                 (let [child (make-many-child ?plural-field bindings)]
+                   (swap! (!children ?plural-field) assoc (:sym child) child)
+                   (swap! (!state ?plural-field) conj (:sym child))
+                   child))))))
 
 (defn swap-many!
   "f should take a vector of fields and return a vector of a strict subset of the same fields"
@@ -394,18 +407,21 @@
     (remove-binding! ?child))
   nil)
 
-(defn init-many! [field]
-  (when (:many field)
-    (let [child-bindings (:init field)]
-      (reset! (!state field) (if child-bindings (empty child-bindings) []))
-      (reset! (!children field) {})
-      (apply add-many! field child-bindings)))
-  field)
+(defn init-state! [?field]
+  (let [renames (init-renames ?field)
+        init (:init ?field)]
+    (if (:many ?field)
+      (let [init (map (partial rename-init renames) init)]
+        (reset! (!state ?field) (if init (empty init) []))
+        (reset! (!children ?field) {})
+        (apply add-many! ?field init))
+      (reset! (!state ?field) (rename-init renames init))))
+  ?field)
 
 (defn make-binding!
   [parent child-meta]
   (-> (make-field parent nil child-meta)
-      init-many!
+      init-state!
       (add-to-parent! parent)))
 
 (defn root [compute meta fields]
@@ -553,6 +569,12 @@
   !form)
 
 (comment
+
+  (let [f (inside-out.forms/form {:x (?things :many {:z ?foo})}
+                                 :init {:x [{:z "zebra"}]})]
+    (add-many! (get f '?things) {:z "elephant"})
+    @f)
+
   (-> (inside-out.forms/form {:X ?x :Y {:z ?z :Q ?q}})
       (set-path-messages! {[:X]    ["X"]
                            [:Y]    ["in root"]
@@ -598,9 +620,7 @@
   "Resets the form to initial values"
   [field & {:keys [deep] :or {deep true}}]
   (doseq [field (if deep (cons field (descendants field)) [field])]
-    (if (:many field)
-      (init-many! field)
-      (reset! field (:init field)))
+    (init-state! field)
     (swap! (!meta field) select-keys [:!messages]))
   field)
 
