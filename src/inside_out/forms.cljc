@@ -26,7 +26,31 @@
 #?(:cljs
    (defn set-global-meta! [m] (set! global-meta m)))
 
-(declare closest)
+(declare closest children make-many-child !children !state)
+
+(defn init-aliases [?map-field]
+  (->> (if (:many ?map-field)
+         (-> ?map-field :many :many/fields)
+         (-> ?map-field children))
+       vals
+       (map (juxt :sym :attribute))
+       (into {})))
+
+(defn rename-init [aliases init]
+  (reduce-kv (fn [out sym attribute]
+               (assoc out sym (or (and attribute (get init attribute))
+                                  (get init sym))))
+             {}
+             aliases))
+
+(defn add-many! [?plural-field & children]
+  (let [bindings (map (partial rename-init (init-aliases ?plural-field)) children)]
+    (->> bindings
+         (mapv (fn [bindings]
+                 (let [child (make-many-child ?plural-field bindings)]
+                   (swap! (!children ?plural-field) assoc (:sym child) child)
+                   (swap! (!state ?plural-field) conj (:sym child))
+                   child))))))
 
 (macros/support-clj-protocols
   (deftype Field [parent compute !state metadata !meta !children]
@@ -47,15 +71,23 @@
     IDeref
     (-deref [o]
       (cond compute (compute (update-vals @!children deref))
-            (:many metadata) (let [state @!state]
-                               (into (empty state)
-                                     (map (comp deref @!children))
-                                     state))
+            (:many metadata) (mapv (comp deref @!children) @!state)
             :else @!state))
 
     IReset
-    (-reset! [o new-value]
-      (reset! !state new-value))
+    (-reset! [?field new-value]
+      (cond (:many metadata)
+            (let [new-values (map (partial rename-init (init-aliases ?field)) new-value)]
+              (reset! !state [])
+              (reset! !children {})
+              (apply add-many! ?field new-values))
+            compute
+            (let [new-value (rename-init (init-aliases ?field) new-value)]
+              (doseq [[sym ?child] @!children]
+                (reset! ?child (get new-value sym))))
+            :else (reset! !state new-value))
+      (swap! !meta select-keys [:!messages])
+      @?field)
     #?@(:cljs [ISwap])
     (-swap! [o f]
       (swap! !state f))
@@ -312,9 +344,14 @@
 
 (defn merge-metas [meta-by-field meta-by-key]
   ;; returns map of {?field {:key <value?}} (meta-by-field)
-  (reduce-kv (fn [m meta-k values]
-               (reduce-kv (fn [m field-k meta-v]
-                            (assoc-in m [field-k meta-k] meta-v)) m values)) meta-by-field meta-by-key))
+  (reduce-kv
+    (fn [m meta-k values]
+      (reduce-kv (fn [m field-k meta-v]
+                   (assoc-in m [field-k meta-k] meta-v))
+                 m
+                 values))
+    meta-by-field
+    meta-by-key))
 
 (defn- make-field
   [parent compute {:as meta :keys [sym attribute]}]
@@ -365,30 +402,6 @@
       (make-binding! child (cond-> meta (some? init) (assoc :init init))))
     child))
 
-(defn init-renames [?map-field]
-  (->> (if (:many ?map-field)
-         (-> ?map-field :many :many/fields)
-         (-> ?map-field children))
-       vals
-       (keep (fn [?field]
-               (when-let [attribute (:attribute ?field)]
-                 [attribute (:sym ?field)])))
-       (into {})))
-
-(defn rename-init [renames x]
-  (if (map? x)
-    (set/rename-keys x renames)
-    x))
-
-(defn add-many! [?plural-field & children]
-  (let [bindings (map (partial rename-init (init-renames ?plural-field)) children)]
-    (->> bindings
-         (mapv (fn [bindings]
-                 (let [child (make-many-child ?plural-field bindings)]
-                   (swap! (!children ?plural-field) assoc (:sym child) child)
-                   (swap! (!state ?plural-field) conj (:sym child))
-                   child))))))
-
 (defn swap-many!
   "f should take a vector of fields and return a vector of a strict subset of the same fields"
   [plural-field f & args]
@@ -407,22 +420,11 @@
     (remove-binding! ?child))
   nil)
 
-(defn init-state! [?field]
-  (let [renames (init-renames ?field)
-        init (:init ?field)]
-    (if (:many ?field)
-      (let [init (map (partial rename-init renames) init)]
-        (reset! (!state ?field) (if init (empty init) []))
-        (reset! (!children ?field) {})
-        (apply add-many! ?field init))
-      (reset! (!state ?field) (rename-init renames init))))
-  ?field)
-
 (defn make-binding!
-  [parent child-meta]
-  (-> (make-field parent nil child-meta)
-      init-state!
-      (add-to-parent! parent)))
+  [?parent child-meta]
+  (let [?child (make-field ?parent nil child-meta)]
+    (reset! ?child (:init ?child))
+    (add-to-parent! ?child ?parent)))
 
 (defn root [compute meta fields]
   (let [root-field (make-field nil compute (assoc (or meta {}) :sym `!root))]
@@ -619,9 +621,8 @@
 (defn clear!
   "Resets the form to initial values"
   [field & {:keys [deep] :or {deep true}}]
-  (doseq [field (if deep (cons field (descendants field)) [field])]
-    (init-state! field)
-    (swap! (!meta field) select-keys [:!messages]))
+  (doseq [?field (if deep (cons field (descendants field)) [field])]
+    (reset! ?field (:init ?field)))
   field)
 
 (comment
@@ -686,3 +687,18 @@
          (let [{:syms ~(mapv second bindings)} field#
                ~as field#]
            ~expr)))))
+
+(comment
+
+  (def ?x (inside-out.forms/form {:a ?a
+                                  :b ?b
+                                  :c (?things :many {:d ?d})}))
+  (reset! ?x {:a 3
+              :b 4
+              :c [{:d 5} {:d 6}]})
+  (reset! ?x {:a 3
+              :b 4
+              :c [{:d 55}]})
+  (deref ?x)
+
+  )
