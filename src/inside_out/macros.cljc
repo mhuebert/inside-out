@@ -19,7 +19,7 @@
 
   NOTE: only works for the subset of protocols/methods listed below."
   [form]
-  (if (:ns &env) ;; target is cljs
+  (if (:ns &env)                                            ;; target is cljs
     form
     (replace-toplevel '{ILookup clojure.lang.ILookup
                         -lookup valAt
@@ -45,11 +45,11 @@
                         -invoke invoke} form)))
 
 ;; from https://stackoverflow.com/questions/39768093/how-to-implement-walk-postwalk-traversal-using-clojure-zip
-(defn prewalk [f loc]
+(defn prewalk-loc [f loc]
   (let [loc (z/replace loc (f (z/node loc) loc))]
     (if-some [loc (z/down loc)]
       (loop [loc loc]
-        (let [loc (prewalk f loc)]
+        (let [loc (prewalk-loc f loc)]
           (if-some [loc (z/right loc)]
             (recur loc)
             (z/up loc))))
@@ -91,7 +91,7 @@
    seq
    (fn make-node [node children]
      (cond (map? node) (with-meta (into (empty node) children) (clojure.core/meta node))
-           (map-entry? node) #?(:clj (clojure.lang.MapEntry. (first children) (second children))
+           (map-entry? node) #?(:clj  (clojure.lang.MapEntry. (first children) (second children))
                                 :cljs (cljs.core/MapEntry. (first children) (second children) nil))
            (vector? node) (with-meta (vec children) (clojure.core/meta node))
            (set? node) (with-meta (set children) (clojure.core/meta node))
@@ -102,30 +102,30 @@
 ;; working with field variables
 
 (defn field? [x]
-  (util/field-sym? (cond-> x (list? x) first)))
+  (util/field-sym? (cond-> x (seq? x) first)))
 
 ;; unwraps fields wrapped in lists
 
-(defn quoted? [x] (and (list? x) (= 'quote (first x))))
+(defn quoted? [x] (and (seq? x) (= 'quote (first x))))
 (defn quote-it [x] `(quote ~x))
 (defn unquote-it [x] (cond-> x (quoted? x) second))
 
 (defn field-sym [x]
   (cond-> x
-          (and (field? x)
-               (list? x)) first))
+    (and (field? x)
+         (seq? x)) first))
 
 (defn quote-field-sym [form]
   (cond-> form
-          (field? form)
-          (-> field-sym quote-it)))
+    (field? form)
+    (-> field-sym quote-it)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; handling ?field metadata
 
 (defn inline-meta [field]
-  (when (list? field)
-    (apply hash-map (rest field))))
+  (when (seq? field)
+    (let [[& {:as m}] (rest field)] m)))
 
 ;; metadata inference: you can pass your own `:infer-meta` function as an option to `with-form*`
 ;; if these are not sufficient for your use-case
@@ -162,47 +162,60 @@
   (let [ns-name (name ns)]
     (reduce-kv (fn [out k v]
                  (cond-> out
-                         (= ns-name (namespace k))
-                         (assoc (ns-ify (name k)) v))) {} m)))
+                   (= ns-name (namespace k))
+                   (assoc (ns-ify (name k)) v))) {} m)))
 
 (comment
- (lift-ns {:form/a.b 1 :form/b.c 2 :other 3} :form))
+  (lift-ns {:form/a.b 1 :form/b.c 2 :other 3} :form))
 
 (defn dissoc-ns [m ns]
   (let [ns-name (name ns)]
     (reduce (fn [out k]
               (cond-> out
-                      (= ns-name (namespace k))
-                      (dissoc k))) m (keys m))))
+                (= ns-name (namespace k))
+                (dissoc k))) m (keys m))))
+
+(declare analyze-form)
+
+(defn analyze-many [{:as field :keys [many]} options]
+  (cond-> field
+    many
+    (assoc :many
+           (let [{:form/keys [fields compute]} (analyze-form many options)]
+             {:many/fields (update-keys fields quote-it)
+              :many/compute compute}))))
+
+(defn analyze-field
+  ([form] (analyze-field form nil))
+  ([form options] (analyze-field form (code-zipper form) options))
+  ([form loc options]
+   (merge
+    ;; fields know their own symbol
+    {:sym (quote-field-sym form)}
+
+    ;; infer metadata from position within form
+    (->> (:infer-meta options default-infer)
+         (reduce (fn [meta f] (merge meta (remove-empty (f meta loc))))
+                 {})
+         (#(update-vals % quote-field-sym)))
+
+    ;; merge inline-meta last, overrides inferred metadata
+    (-> (inline-meta form)                                  ;; (?field :attr v)
+        (analyze-many options)))))
+
+(comment
+  (analyze-field '(?field :many {:a ?a :b ?b})))
 
 (defn analyze-form
   ([form] (analyze-form form {}))
   ([form options]
-   (let [analyze-many (fn [{:as field :keys [many]}]
-                        (cond-> field
-                                many
-                                (assoc :many
-                                       (let [{:form/keys [fields compute]} (analyze-form many options)]
-                                         {:many/fields (update-keys fields quote-it)
-                                          :many/compute compute}))))
-         [return fields] (let [!fields (atom {})]
+   (let [[return fields] (let [!fields (atom {})]
                            [(->> (code-zipper form)
-                                 (prewalk (fn [x loc]
-                                            (when (field? x)
-                                              (swap! !fields update (field-sym x) merge
-                                                     ;; fields know their own symbol
-                                                     {:sym (quote-field-sym x)}
-
-                                                     ;; infer metadata from position within form
-                                                     (->> (:infer-meta options default-infer)
-                                                          (reduce (fn [meta f] (merge meta (remove-empty (f meta loc))))
-                                                                  {})
-                                                          (#(update-vals % quote-field-sym)))
-
-                                                     ;; merge inline-meta last, overrides inferred metadata
-                                                     (-> (inline-meta x) ;; (?field :attr v)
-                                                         analyze-many))) ;; handle many-children
-                                            (field-sym x)))
+                                 (prewalk-loc (fn [x loc]
+                                                (when (field? x)
+                                                  (swap! !fields update (field-sym x) merge
+                                                         (analyze-field x loc options)))
+                                                (field-sym x)))
                                  z/node)
                             @!fields])
          ;; the core function where we bring bindings into scope and evaluate the form
@@ -222,8 +235,8 @@
                                          %)))
          ;; {?field {:validators X}}
          meta-by-field (cond-> (:meta options)
-                               (map? (:meta options))
-                               (update-keys quote-field-sym))
+                         (map? (:meta options))
+                         (update-keys quote-field-sym))
          form-meta (-> (lift-ns options :form)
                        (assoc :meta `(~'inside-out.forms/merge-metas ~meta-by-field ~meta-by-key)))]
      {:form/fields fields
@@ -243,33 +256,33 @@
 
 (comment
 
- ;; check that all the ?vars are found
- (->> (analyze-form '[[:db/add 1 :name/first ?first]
-                      {:name/last ?last}
-                      [:db/add 2 :pet/name ?pet-name]])
-      :form/fields
-      keys
-      set
-      (= '#{?first ?last ?pet-name}))
+  ;; check that all the ?vars are found
+  (->> (analyze-form '[[:db/add 1 :name/first ?first]
+                       {:name/last ?last}
+                       [:db/add 2 :pet/name ?pet-name]])
+       :form/fields
+       keys
+       set
+       (= '#{?first ?last ?pet-name}))
 
- ;; verify that all fields are found and replaced
- (->> '[[:db/add ?id :name/first ?owner-name]
-        [:db/add 2 :pet/owner (?id :default 99)]
-        [:db/add 2 :pet/name ?pet-name]
-        #{?set-member}]
+  ;; verify that all fields are found and replaced
+  (->> '[[:db/add ?id :name/first ?owner-name]
+         [:db/add 2 :pet/owner (?id :default 99)]
+         [:db/add 2 :pet/name ?pet-name]
+         #{?set-member}]
+       analyze-form
+       ((juxt :form/return (comp set keys :form/fields)))
+       (= '[[[:db/add ?id :name/first ?owner-name]
+             [:db/add 2 :pet/owner ?id]
+             [:db/add 2 :pet/name ?pet-name]
+             #{?set-member}]
+            #{?id ?owner-name ?pet-name ?set-member}]))
+
+  ;; metadata overrides
+  (-> '[[:db/add 1 :name/first (?first :attribute :first-name)]]
       analyze-form
-      ((juxt :form/return (comp set keys :form/fields)))
-      (= '[[[:db/add ?id :name/first ?owner-name]
-            [:db/add 2 :pet/owner ?id]
-            [:db/add 2 :pet/name ?pet-name]
-            #{?set-member}]
-           #{?id ?owner-name ?pet-name ?set-member}]))
-
- ;; metadata overrides
- (-> '[[:db/add 1 :name/first (?first :attribute :first-name)]]
-     analyze-form
-     (get-in [:form/fields '?first :attribute])
-     (= :first-name)))
+      (get-in [:form/fields '?first :attribute])
+      (= :first-name)))
 
 (defn with-form*
   "Implements with-form. Can pass :infer-meta function for additional metadata inference."
@@ -282,14 +295,22 @@
                       ~@(->> fields
                              (mapcat (fn [[sym {:keys [many]}]]
                                        [(cond-> sym
-                                                many
-                                                (with-meta {:many/bindings (->> many :many/fields keys vec)}))
+                                          many
+                                          (with-meta {:many/bindings (->> many :many/fields keys vec)}))
                                         `(get ~root-sym '~sym)])))]
                      ~@body)))
 
 (defn form* [_form _env expr options]
   (let [{:form/keys [fields compute meta]} (analyze-form expr options)]
     `(~'inside-out.forms/root ~compute ~(or meta {}) ~(vec (vals fields)))))
+
+(defn field* [_form _env expr options]
+  (let [field-meta (-> (analyze-form expr options)
+                       :form/fields
+                       (get '?))]
+    `(let [?field# (~'inside-out.forms/make-field nil nil ~field-meta)]
+       (reset! ?field# (:init ?field#))
+       ?field#)))
 
 ;; just for dev/notebook
 (defn timeout* [_ _ ms body]

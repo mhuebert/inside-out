@@ -47,10 +47,12 @@
   (let [bindings (map (partial rename-init (init-aliases ?plural-field)) children)]
     (->> bindings
          (mapv (fn [bindings]
-                 (let [child (make-many-child ?plural-field bindings)]
-                   (swap! (!children ?plural-field) assoc (:sym child) child)
-                   (swap! (!state ?plural-field) conj (:sym child))
-                   child))))))
+                 (let [?child (make-many-child ?plural-field bindings)]
+                   (swap! (!children ?plural-field) assoc (:sym ?child) ?child)
+                   (swap! (!state ?plural-field) conj (:sym ?child))
+                   ?child))))))
+
+(def ^:dynamic *setting-init* false)
 
 (macros/support-clj-protocols
   (deftype Field [parent compute !state metadata !meta !children]
@@ -85,8 +87,9 @@
             (let [new-value (rename-init (init-aliases ?field) new-value)]
               (doseq [[sym ?child] @!children]
                 (reset! ?child (get new-value sym))))
-            :else (reset! !state new-value))
-      (swap! !meta select-keys [:!messages])
+            :else (do
+                    (when *setting-init* (swap! !meta assoc :init new-value))
+                    (reset! !state new-value)))
       @?field)
     #?@(:cljs [ISwap])
     (-swap! [o f]
@@ -108,8 +111,6 @@
         (do
           (assert compute (str (:sym metadata) " is a simple field not associated with an expression."))
           (compute bindings))))))
-
-(defn compute [field bindings] (field bindings))
 
 (defn !meta [^Field field] (.-!meta field))
 (defn !children [^Field ?field] (.-!children ?field))
@@ -353,7 +354,7 @@
     meta-by-field
     meta-by-key))
 
-(defn- make-field
+(defn make-field
   [parent compute {:as meta :keys [sym attribute]}]
   ;; "inherit" metadata from ancestors that contain a :meta option with
   ;; a matching symbol or attribute.
@@ -366,7 +367,8 @@
         metadata       (merge (when global-meta
                                 (merge (global-meta sym)
                                        (global-meta attribute)))
-                              inherited-meta meta)
+                              inherited-meta
+                              meta)
         field          (->Field parent
                                 compute
                                 (r/atom (:init metadata))
@@ -379,6 +381,9 @@
 (defn field
   [& {:as field-meta}]
   (make-field nil nil field-meta))
+
+(defmacro field [& args]
+  (macros/field* &form &env (list* '? args) nil))
 
 (declare make-binding!)
 
@@ -393,14 +398,15 @@
 (defn remove-binding! [child]
   (swap! (!children (parent child)) dissoc (:sym child)))
 
-(defn- make-many-child [?field bindings]
-  (let [{:many/keys [compute fields]} (:many ?field)
-        child (make-field ?field compute (merge {:sym (gensym 'list-child-)}
-                                                (:child-meta ?field)))]
+(defn- make-many-child [?field init]
+  (let [ {:many/keys [compute fields]} (:many ?field)
+        ?child (make-field ?field compute (merge {:sym  (gensym 'list-child-)
+                                                  :init init}
+                                                 (:child-meta ?field)))]
     (doseq [[sym meta] fields
-            :let [init (get bindings sym)]]
-      (make-binding! child (cond-> meta (some? init) (assoc :init init))))
-    child))
+            :let [init (get init sym)]]
+      (make-binding! ?child (cond-> meta (some? init) (assoc :init init))))
+    ?child))
 
 (defn swap-many!
   "f should take a vector of fields and return a vector of a strict subset of the same fields"
@@ -423,13 +429,14 @@
 (defn make-binding!
   [?parent child-meta]
   (let [?child (make-field ?parent nil child-meta)]
-    (reset! ?child (:init ?child))
+    (binding [*setting-init* true]
+      (reset! ?child (:init ?child)))
     (add-to-parent! ?child ?parent)))
 
 (defn root [compute meta fields]
-  (let [root-field (make-field nil compute (assoc (or meta {}) :sym `!root))]
-    (doseq [field-meta fields] (make-binding! root-field field-meta))
-    root-field))
+  (let [?root (make-field nil compute (assoc (or meta {}) :sym `!root))]
+    (doseq [field-meta fields] (make-binding! ?root field-meta))
+    ?root))
 
 (defn debug-name [?field]
   (->> (iterate parent ?field)
@@ -622,7 +629,12 @@
   "Resets the form to initial values"
   [field & {:keys [deep] :or {deep true}}]
   (doseq [?field (if deep (cons field (descendants field)) [field])]
-    (reset! ?field (:init ?field)))
+    (reset! ?field (:init ?field))
+    (swap! !meta dissoc
+           :blurred
+           :touched
+           :blurred
+           :remote-messages))
   field)
 
 (comment
@@ -649,6 +661,10 @@
             (assoc :focused false
                    :blurred true
                    :touched true))))
+
+(defn make-form [expr & {:as opts}]
+  (let [{:form/keys [fields compute meta]} (macros/analyze-form expr opts)]
+    (root compute (or meta {}) (vec (vals fields)))))
 
 (defmacro form [expr & {:as opts}]
   (macros/form* &form &env expr opts))
