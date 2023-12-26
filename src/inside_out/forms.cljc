@@ -118,11 +118,17 @@
 (defn !state [^Field ?field] (.-!state ?field))
 (defn parent ^Field [^Field ?field] (.-parent ?field))
 
-(defn closest [field pred]
-  (when field
-    (if-some [v (pred field)]
+(defn closest [?field pred]
+  (when ?field
+    (if-some [v (pred ?field)]
       v
-      (closest (parent field) pred))))
+      (closest (parent ?field) pred))))
+
+(defn ancestor-by [?field pred]
+  (when ?field
+    (if (some? (pred ?field))
+      ?field
+      (ancestor-by (parent ?field) pred))))
 
 (defn message
   ([type] {:type type})
