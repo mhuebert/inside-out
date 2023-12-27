@@ -22,7 +22,9 @@
 (defn field-sym? [sym]
   (and (symbol? sym)
        (let [sym-str (str sym)]
-         (or (str/starts-with? sym-str "?")
+         (or (str/starts-with? (name sym) "?")
+             (some-> (namespace sym) (str/starts-with? "?"))
+
              (str/starts-with? sym-str "...")))))
 
 (defn many-sym? [sym]

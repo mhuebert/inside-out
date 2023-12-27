@@ -206,22 +206,26 @@
 (comment
   (analyze-field '(?field :many {:a ?a :b ?b})))
 
+(defn unqualify [sym]
+  (symbol (str/replace (str (field-sym sym)) "/" "__")))
+
 (defn analyze-form
   ([form] (analyze-form form {}))
   ([form options]
    (let [[return fields] (let [!fields (atom {})]
                            [(->> (code-zipper form)
                                  (prewalk-loc (fn [x loc]
-                                                (when (field? x)
-                                                  (swap! !fields update (field-sym x) merge
-                                                         (analyze-field x loc options)))
-                                                (field-sym x)))
+                                                (if (field? x)
+                                                  (do (swap! !fields update (field-sym x) merge
+                                                             (analyze-field x loc options))
+                                                      (unqualify x))
+                                                  x)))
                                  z/node)
                             @!fields])
          ;; the core function where we bring bindings into scope and evaluate the form
          compute (let [bindings (gensym "bindings")]
                    `(fn [~bindings]
-                      (let [~@(mapcat (fn [sym] [(unquote-it sym) `(get ~bindings '~sym)]) (keys fields))]
+                      (let [~@(mapcat (fn [sym] [(unqualify sym) `(get ~bindings '~sym)]) (keys fields))]
                         ~return)))
          ;; {:validators {?field X}}
          meta-by-key (-> options
