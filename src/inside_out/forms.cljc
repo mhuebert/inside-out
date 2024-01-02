@@ -26,7 +26,7 @@
 #?(:cljs
    (defn set-global-meta! [m] (set! global-meta m)))
 
-(declare closest children make-many-child !children !state)
+(declare closest children !children !state)
 
 (defn init-aliases [?map-field]
   (->> (if (:many ?map-field)
@@ -43,14 +43,30 @@
              {}
              aliases))
 
+(declare make-field make-binding! parent)
+
 (defn add-many! [?plural-field & children]
-  (let [bindings (map (partial rename-init (init-aliases ?plural-field)) children)]
-    (->> bindings
-         (mapv (fn [bindings]
-                 (let [?child (make-many-child ?plural-field bindings)]
-                   (swap! (!children ?plural-field) assoc (:sym ?child) ?child)
-                   (swap! (!state ?plural-field) conj (:sym ?child))
-                   ?child))))))
+  (let [aliases  (init-aliases ?plural-field)
+        !children (!children ?plural-field)
+        !state (!state ?plural-field)
+        [children state bindings] (reduce
+                                    (fn [[children state bindings] child]
+                                      (let [{:many/keys [compute fields]} (:many ?plural-field)
+                                            init   (rename-init aliases child)
+                                            ?child (make-field ?plural-field compute (merge {:sym  (gensym 'list-child-)
+                                                                                             :init init}
+                                                                                            (:child-meta ?plural-field)))]
+                                        (doseq [[sym meta] fields
+                                                :let [init (get init sym)]]
+                                          (make-binding! ?child (cond-> meta (some? init) (assoc :init init))))
+                                        [(assoc children (:sym ?child) ?child)
+                                         (conj state (:sym ?child))
+                                         (conj bindings ?child)]))
+                                    [@!children @!state []]
+                                    children)]
+    (reset! !children children)
+    (reset! !state state)
+    bindings))
 
 (def ^:dynamic *setting-init* false)
 
@@ -72,21 +88,22 @@
 
     IDeref
     (-deref [o]
-      (cond compute (compute (update-vals @!children deref))
-            (:many metadata) (mapv (comp deref @!children) @!state)
-            :else @!state))
+      (if (:many metadata)
+        (mapv (comp deref @!children) @!state)
+        @!state))
 
     IReset
     (-reset! [?field new-value]
       (cond (:many metadata)
             (let [new-values (map (partial rename-init (init-aliases ?field)) new-value)]
-              (reset! !state [])
               (reset! !children {})
+              (r/silently (reset! !state []))
               (apply add-many! ?field new-values))
             compute
             (let [new-value (rename-init (init-aliases ?field) new-value)]
               (doseq [[sym ?child] @!children]
-                (reset! ?child (get new-value sym))))
+                (reset! ?child (get new-value sym)))
+              @?field)
             :else (do
                     (when *setting-init* (swap! !meta assoc :init new-value))
                     (reset! !state new-value)))
@@ -375,13 +392,17 @@
                                        (global-meta attribute)))
                               inherited-meta
                               meta)
+        !children      (atom {})
+        !meta          (r/atom {})
         field          (->Field parent
                                 compute
-                                (r/atom (:init metadata))
+                                (if compute
+                                  (r/reaction (compute (update-vals @!children deref)))
+                                  (r/atom (:init metadata)))
                                 metadata
-                                (r/atom {})
-                                (atom {}))]
-    (swap! (!meta field) assoc :!messages (messages-reaction field))
+                                !meta
+                                !children)]
+    (swap! !meta assoc :!messages (messages-reaction field))
     field))
 
 (defn field
@@ -403,16 +424,6 @@
 
 (defn remove-binding! [child]
   (swap! (!children (parent child)) dissoc (:sym child)))
-
-(defn- make-many-child [?field init]
-  (let [ {:many/keys [compute fields]} (:many ?field)
-        ?child (make-field ?field compute (merge {:sym  (gensym 'list-child-)
-                                                  :init init}
-                                                 (:child-meta ?field)))]
-    (doseq [[sym meta] fields
-            :let [init (get init sym)]]
-      (make-binding! ?child (cond-> meta (some? init) (assoc :init init))))
-    ?child))
 
 (defn swap-many!
   "f should take a vector of fields and return a vector of a strict subset of the same fields"
@@ -618,13 +629,13 @@
    form's :remote-messages, which are included in `(messages form)`."
   [!form promise]
   #?(:cljs
-     (let [meta-atom (!meta !form)
+     (let [!meta (!meta !form)
            complete! (fn [result]
-                       (swap! meta-atom dissoc :loading?)
+                       (swap! !meta dissoc :loading?)
                        (set-path-messages! !form (parse-remote-messages result))
                        result)]
        (clear-remote-messages! !form)
-       (swap! meta-atom assoc :loading? true)
+       (swap! !meta assoc :loading? true)
        (p/catch
          (p/-> promise complete!)
          (fn [e] (complete! (or (util/guard (ex-data e) ::messages-by-path)
@@ -636,7 +647,7 @@
   [field & {:keys [deep] :or {deep true}}]
   (doseq [?field (if deep (cons field (descendants field)) [field])]
     (reset! ?field (:init ?field))
-    (swap! !meta dissoc
+    (swap! (!meta ?field) dissoc
            :blurred
            :touched
            :blurred
@@ -712,12 +723,14 @@
 
 (comment
 
-  (def ?x (inside-out.forms/form {:a ?a
-                                  :b ?b
-                                  :c (?things :many {:d ?d})}))
+  (def ?x (inside-out.forms/form (do
+                                   (prn :compute)
+                                   {:a ?a
+                                    :b ?b
+                                    :c (?things :many {:d ?d})})))
   (reset! ?x {:a 3
               :b 4
-              :c [{:d 5} {:d 6}]})
+              :c [{:d 5} {:d 6} {:d 7} {:d 5} {:d 6} {:d 7}]})
   (reset! ?x {:a 3
               :b 4
               :c [{:d 55}]})
