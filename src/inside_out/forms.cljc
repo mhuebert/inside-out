@@ -46,9 +46,9 @@
 (declare make-field make-binding! parent)
 
 (defn add-many! [?plural-field & children]
-  (let [aliases  (init-aliases ?plural-field)
+  (let [aliases   (init-aliases ?plural-field)
         !children (!children ?plural-field)
-        !state (!state ?plural-field)
+        !state    (!state ?plural-field)
         [children state bindings] (reduce
                                     (fn [[children state bindings] child]
                                       (let [{:many/keys [compute fields]} (:many ?plural-field)
@@ -425,17 +425,18 @@
 (defn remove-binding! [child]
   (swap! (!children (parent child)) dissoc (:sym child)))
 
-(defn swap-many!
+(defn swap-many-children!
   "f should take a vector of fields and return a vector of a strict subset of the same fields"
-  [plural-field f & args]
-  (let [pv      (mapv #(get plural-field %) @(!state plural-field))
+  [?plural-field f & args]
+  (let [pv      (mapv #(get ?plural-field %) @(!state ?plural-field))
         v       (apply f pv args)
-        _       (assert (set/subset? (set v) (set pv)) "must return a subset of fields")
-        _       (assert (vector? v) "must return a vector")
         removed (set/difference (set pv) (set v))]
-    (reset! (!state plural-field) (mapv :sym v))
-    (swap! (!children plural-field) #(apply dissoc % (map :sym removed)))
-    plural-field))
+    (assert (set/subset? (set v) (set pv)) "must return a subset of fields")
+    (assert (vector? v) "must return a vector")
+
+    (swap! (!children ?plural-field) #(apply dissoc % (map :sym removed)))
+    (reset! (!state ?plural-field) (mapv :sym v))
+    ?plural-field))
 
 (defn remove-many! [& children]
   (doseq [{:as ?child :keys [sym]} children]
@@ -629,7 +630,7 @@
    form's :remote-messages, which are included in `(messages form)`."
   [!form promise]
   #?(:cljs
-     (let [!meta (!meta !form)
+     (let [!meta     (!meta !form)
            complete! (fn [result]
                        (swap! !meta dissoc :loading?)
                        (set-path-messages! !form (parse-remote-messages result))
