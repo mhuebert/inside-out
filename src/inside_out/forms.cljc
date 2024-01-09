@@ -628,14 +628,14 @@
 
    If the promise resolves to a message (a map containing :content), it will be set to the
    form's :remote-messages, which are included in `(messages form)`."
-  [!form promise]
+  [?field promise]
   #?(:cljs
-     (let [!meta     (!meta !form)
+     (let [!meta     (!meta ?field)
            complete! (fn [result]
                        (swap! !meta dissoc :loading?)
-                       (set-path-messages! !form (parse-remote-messages result))
+                       (set-path-messages! ?field (parse-remote-messages result))
                        result)]
-       (clear-remote-messages! !form)
+       (clear-remote-messages! ?field)
        (swap! !meta assoc :loading? true)
        (p/catch
          (p/-> promise complete!)
