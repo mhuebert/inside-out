@@ -398,7 +398,8 @@
                                 compute
                                 (if compute
                                   (r/reaction (compute (update-vals @!children deref)))
-                                  (r/atom (:init metadata)))
+                                  (r/atom (or (:init metadata)
+                                              (:default metadata))))
                                 metadata
                                 !meta
                                 !children)]
@@ -448,7 +449,8 @@
   [?parent child-meta]
   (let [?child (make-field ?parent nil child-meta)]
     (binding [*setting-init* true]
-      (reset! ?child (:init ?child)))
+      (reset! ?child (or (:init ?child)
+                         (:default ?child))))
     (add-to-parent! ?child ?parent)))
 
 (defn root [compute meta fields]
@@ -647,7 +649,8 @@
   "Resets the form to initial values"
   [field & {:keys [deep] :or {deep true}}]
   (doseq [?field (if deep (cons field (descendants field)) [field])]
-    (reset! ?field (:init ?field))
+    (reset! ?field (or (:init ?field)
+                       (:default ?field)))
     (swap! (!meta ?field) dissoc
            :blurred
            :touched
