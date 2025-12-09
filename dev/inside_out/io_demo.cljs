@@ -2,6 +2,7 @@
   "Capstone Demo: IO Workflow System
 
    A complete demonstration of the io DSL for AI coordination:
+   - Meta-planning: describe a goal, AI generates the workflow
    - Workflow creation from templates
    - Live state visualization
    - Transient UIs for human input
@@ -13,6 +14,8 @@
             [inside-out.io.executor :as exec]
             [inside-out.io.ui :as ui]
             [inside-out.io.persist :as persist]
+            [inside-out.io.planner :as planner]
+            [inside-out.io.planner-ui :as planner-ui]
             [promesa.core :as p]
             [re-db.reactive :as r]
             [reagent.core :as reagent]
@@ -58,13 +61,16 @@
 ;; =============================================================================
 
 (defonce !app-state
-  (r/atom {:view :home           ; :home :workflow :create
+  (r/atom {:view :home           ; :home :workflow :create :planner
            :current-workflow nil ; ID of active workflow
-           :manager nil}))       ; WorkflowManager instance
+           :manager nil          ; WorkflowManager instance
+           :planner nil}))       ; Planner instance
 
 (defn init-manager! []
   (when-not (:manager @!app-state)
-    (swap! !app-state assoc :manager (persist/make-manager))))
+    (swap! !app-state assoc
+           :manager (persist/make-manager)
+           :planner (planner/make-mock-planner))))
 
 ;; =============================================================================
 ;; NAVIGATION
@@ -197,6 +203,21 @@
           "Load Example"]]]])))
 
 ;; =============================================================================
+;; PLANNER CTA
+;; =============================================================================
+
+(defn planner-cta []
+  [:div.card.bg-gradient-to-r.from-primary.to-secondary.text-primary-content.shadow-xl
+   [:div.card-body.text-center
+    [:h2.card-title.text-2xl.justify-center "🎯 Describe Your Goal"]
+    [:p.opacity-90
+     "Tell me what you want to accomplish, and I'll create a step-by-step plan for us to work on together."]
+    [:div.card-actions.justify-center.mt-4
+     [:button.btn.btn-lg.glass
+      {:on-click #(navigate! :planner)}
+      "Start Planning →"]]]])
+
+;; =============================================================================
 ;; HOME VIEW
 ;; =============================================================================
 
@@ -206,6 +227,11 @@
     [:h1.text-4xl.font-bold.mb-2 "io Workflow System"]
     [:p.text-lg.text-base-content/70
      "Human-AI collaborative workflows with transient UIs"]]
+
+   ;; Main CTA: AI Planner
+   [planner-cta]
+
+   [:div.divider "or choose a template"]
 
    [template-gallery]
 
@@ -250,6 +276,20 @@
         "Go Home"]])))
 
 ;; =============================================================================
+;; PLANNER VIEW
+;; =============================================================================
+
+(defn planner-view-wrapper []
+  [:div
+   [:div.flex.items-center.gap-4.mb-6.max-w-4xl.mx-auto.px-6
+    [:button.btn.btn-ghost.btn-sm
+     {:on-click #(navigate! :home)}
+     "← Back"]]
+   [planner-ui/planner-view
+    {:planner (:planner @!app-state)
+     :ai-client (make-smart-client)}]])
+
+;; =============================================================================
 ;; MAIN APP
 ;; =============================================================================
 
@@ -261,6 +301,7 @@
       (case (:view @!app-state)
         :home [home-view]
         :workflow [workflow-view]
+        :planner [planner-view-wrapper]
         [home-view])]]))
 
 ;; =============================================================================
