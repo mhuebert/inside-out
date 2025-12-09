@@ -1,6 +1,7 @@
 {:deps true
  :dev-http {8765 "public"
-            7778 "public/build"}
+            7778 "public/build"
+            8766 "dev"}
  :builds
  {:clerk
   {:target :esm
@@ -8,5 +9,11 @@
                               inside-out.notebook]}}
    :output-dir "public/js"
    :release {:output-dir "public/build/js"}
+   :asset-path "/js"}
+
+  :io-demo
+  {:target :browser
+   :modules {:main {:init-fn inside-out.io-demo/init!}}
+   :output-dir "dev/js"
    :asset-path "/js"
-   }}}
+   :devtools {:after-load inside-out.io-demo/mount!}}}}
