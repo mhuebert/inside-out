@@ -149,14 +149,14 @@
 (defn topological-sort
   "Sort slots by dependency order"
   [dep-graph]
-  (let [in-degree (reduce-kv
+  (let [;; in-degree = number of dependencies each node has
+        in-degree (reduce-kv
                     (fn [m sym {:keys [deps]}]
-                      (reduce (fn [m d]
-                                (update m d (fnil inc 0)))
-                              (update m sym (fnil identity 0))
-                              deps))
+                      ;; sym has (count deps) dependencies, so its in-degree is that count
+                      (assoc m sym (count deps)))
                     {}
                     dep-graph)
+        ;; Start with nodes that have no dependencies
         queue (into [] (filter #(zero? (in-degree %)) (keys dep-graph)))]
     (loop [queue queue
            result []
@@ -164,12 +164,17 @@
       (if (empty? queue)
         (if (= (count result) (count dep-graph))
           result
-          (throw (ex-info "Circular dependency detected" {:graph dep-graph})))
+          (throw (ex-info "Circular dependency detected" {:graph dep-graph
+                                                          :in-degree in-deg
+                                                          :processed result})))
         (let [sym (first queue)
+              ;; Find all nodes that depend on sym
               dependents (->> dep-graph
                               (filter (fn [[_ {:keys [deps]}]] (contains? deps sym)))
                               (map first))
+              ;; Decrement their in-degree (one dependency satisfied)
               new-in-deg (reduce (fn [m d] (update m d dec)) in-deg dependents)
+              ;; Any that hit 0 are ready to process
               new-ready (filter #(zero? (new-in-deg %)) dependents)]
           (recur (into (vec (rest queue)) new-ready)
                  (conj result sym)
