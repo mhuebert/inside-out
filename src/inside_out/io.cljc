@@ -46,6 +46,26 @@
 ;; FORM ANALYSIS
 ;; =============================================================================
 
+(defn parse-slot-meta
+  "Parse slot metadata from a list of args.
+   Handles both :key value pairs and standalone :flag keywords.
+   (:ai \"prompt\" :approve) -> {:ai \"prompt\" :approve true}"
+  [args]
+  (loop [args args
+         result {}]
+    (if (empty? args)
+      result
+      (let [[k & rest] args]
+        (if (keyword? k)
+          ;; Check if next item is a value (not a keyword) or if k is a flag
+          (if (or (empty? rest) (keyword? (first rest)))
+            ;; Flag - no value, set to true
+            (recur rest (assoc result k true))
+            ;; Key-value pair
+            (recur (next rest) (assoc result k (first rest))))
+          ;; Skip non-keywords (shouldn't happen in well-formed input)
+          (recur rest result))))))
+
 (defn extract-slots
   "Extract all slots from an io form, returning a map of {slot-sym -> slot-info}"
   [form]
@@ -69,11 +89,11 @@
                                            :type (if (human-slot? x) :human :ai)})
               x)
 
-          ;; Slot with metadata: (?var :key val ...)
+          ;; Slot with metadata: (?var :key val ... :flag ...)
           (and (list? x)
                (slot? (first x)))
-          (let [[sym & kvs] x
-                meta (apply hash-map kvs)]
+          (let [[sym & args] x
+                meta (parse-slot-meta args)]
             (swap! slots update sym merge {:sym sym
                                            :type (if (human-slot? sym) :human :ai)
                                            :meta meta})
